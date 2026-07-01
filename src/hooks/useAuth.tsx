@@ -1,0 +1,106 @@
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import type { Session, User } from "@supabase/supabase-js";
+
+const LOCAL_ACCESS_KEY = "direct.local.access";
+const LOCAL_ACCESS_EMAIL = "mvolv27@gmail.com";
+const LOCAL_ACCESS_PASSWORD = "Direct27.";
+
+type LocalSession = {
+  isLocalAccess: true;
+  user: {
+    id: string;
+    email: string;
+  };
+};
+
+type AppSession = Session | LocalSession;
+type AppUser = User | LocalSession["user"];
+
+type AuthCtx = {
+  user: AppUser | null;
+  session: AppSession | null;
+  loading: boolean;
+  isLocalAccess: boolean;
+  signInLocal: (email: string, password: string) => boolean;
+  signOut: () => Promise<void>;
+};
+
+const Ctx = createContext<AuthCtx>({
+  user: null,
+  session: null,
+  loading: true,
+  isLocalAccess: false,
+  signInLocal: () => false,
+  signOut: async () => {},
+});
+
+function createLocalSession(): LocalSession {
+  return {
+    isLocalAccess: true,
+    user: {
+      id: "local-mvolv27",
+      email: LOCAL_ACCESS_EMAIL,
+    },
+  };
+}
+
+function isLocalSession(session: AppSession | null): session is LocalSession {
+  return !!session && "isLocalAccess" in session;
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<AppSession | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      if (localStorage.getItem(LOCAL_ACCESS_KEY) === "true") return;
+      setSession(s);
+      setLoading(false);
+    });
+    if (localStorage.getItem(LOCAL_ACCESS_KEY) === "true") {
+      setSession(createLocalSession());
+      setLoading(false);
+      return () => sub.subscription.unsubscribe();
+    }
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  function signInLocal(email: string, password: string) {
+    const isAllowed =
+      email.trim().toLowerCase() === LOCAL_ACCESS_EMAIL &&
+      password === LOCAL_ACCESS_PASSWORD;
+    if (!isAllowed) return false;
+    localStorage.setItem(LOCAL_ACCESS_KEY, "true");
+    setSession(createLocalSession());
+    return true;
+  }
+
+  async function signOut() {
+    localStorage.removeItem(LOCAL_ACCESS_KEY);
+    setSession(null);
+    await supabase.auth.signOut();
+  }
+
+  return (
+    <Ctx.Provider
+      value={{
+        user: session?.user ?? null,
+        session,
+        loading,
+        isLocalAccess: isLocalSession(session),
+        signInLocal,
+        signOut,
+      }}
+    >
+      {children}
+    </Ctx.Provider>
+  );
+}
+
+export const useAuth = () => useContext(Ctx);
