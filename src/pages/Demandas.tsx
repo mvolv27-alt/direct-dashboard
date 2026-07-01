@@ -14,11 +14,13 @@ import {
   getCopyTemplates,
   horarioDemanda,
   nomeEfetivoAlocacao,
+  telefoneEfetivoAlocacao,
   applyTemplate,
 } from "@/lib/copyTemplates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -387,6 +389,15 @@ export default function DemandasPage() {
   const [diaristaPickerOpen, setDiaristaPickerOpen] = useState(false);
   const [collapsedRedes, setCollapsedRedes] = useState<Set<string>>(new Set());
   const [collapsedLojas, setCollapsedLojas] = useState<Set<string>>(new Set());
+  const [copyPanel, setCopyPanel] = useState<"gerente" | "vagas" | null>(null);
+  const [copyDraft, setCopyDraft] = useState("");
+  const [copyFilters, setCopyFilters] = useState({
+    rede: "todas",
+    loja: "todas",
+    setor: "todos",
+    dia: "",
+    horario: "todos",
+  });
   const knownGroupsRef = useRef({ redes: new Set<string>(), lojas: new Set<string>() });
 
   const toggleRede = (rede: string) =>
@@ -505,6 +516,42 @@ export default function DemandasPage() {
       .filter((d) => matchesTab(d, tab))
       .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario));
   }, [filteredBase, tab, matchesTab]);
+
+  const copyDemandas = useMemo(() => {
+    return demandas
+      .filter((d) => copyFilters.rede === "todas" || demandaRede(d) === copyFilters.rede)
+      .filter((d) => copyFilters.loja === "todas" || demandaLoja(d) === copyFilters.loja)
+      .filter((d) => copyFilters.setor === "todos" || demandaSetor(d) === copyFilters.setor)
+      .filter((d) => !copyFilters.dia || d.data === copyFilters.dia)
+      .filter((d) => copyFilters.horario === "todos" || d.horario === copyFilters.horario)
+      .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario));
+  }, [demandas, copyFilters]);
+
+  const copyOptions = useMemo(() => {
+    const unique = (values: string[]) =>
+      Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const base = demandas
+      .filter((d) => copyFilters.rede === "todas" || demandaRede(d) === copyFilters.rede)
+      .filter((d) => copyFilters.loja === "todas" || demandaLoja(d) === copyFilters.loja)
+      .filter((d) => copyFilters.setor === "todos" || demandaSetor(d) === copyFilters.setor)
+      .filter((d) => !copyFilters.dia || d.data === copyFilters.dia);
+    return {
+      redes: unique(demandas.map(demandaRede)),
+      lojas: unique(base.map(demandaLoja)),
+      setores: unique(base.map(demandaSetor)),
+      dias: unique(base.map((d) => d.data)),
+      horarios: unique(base.map((d) => d.horario)),
+    };
+  }, [demandas, copyFilters]);
+
+  useEffect(() => {
+    if (!copyPanel) return;
+    setCopyDraft(
+      copyPanel === "gerente"
+        ? buildEscalaGerenteText(copyDemandas)
+        : buildVagasDisponiveisText(copyDemandas),
+    );
+  }, [copyPanel, copyDemandas]);
 
   const diaristasFiltrados = useMemo(() => {
     const q = diaristaSearch.toLowerCase().trim();
@@ -782,6 +829,17 @@ export default function DemandasPage() {
     }
   }
 
+  function openCopyPanel(type: "gerente" | "vagas") {
+    setCopyFilters({
+      rede: redeFilter,
+      loja: lojaFilter,
+      setor: setorFilter,
+      dia: diaFilter,
+      horario: "todos",
+    });
+    setCopyPanel(type);
+  }
+
   function handleReposicaoAlocacao(
     d: Demanda,
     alocacaoId: string,
@@ -851,6 +909,111 @@ export default function DemandasPage() {
     });
     refresh();
     toast.success(`${diaristaNome} alocado na demanda ${d.codigo}`);
+  }
+
+  function renderCopyPopoverContent(type: "gerente" | "vagas") {
+    const demandasNoTexto =
+      type === "vagas" ? copyDemandas.filter((d) => vagasLivresDemanda(d) > 0) : copyDemandas;
+
+    return (
+      <PopoverContent
+        className="z-[120] w-[min(92vw,760px)] rounded-2xl p-4"
+        align="end"
+        sideOffset={10}
+      >
+        <div className="grid gap-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              {type === "gerente" ? "Copiar escala para gerente" : "Copiar vagas disponíveis"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Texto pré-salvo das configurações. Ele atualiza em tempo real com filtros, vagas e diaristas alocados.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <Select
+              value={copyFilters.rede}
+              onValueChange={(rede) =>
+                setCopyFilters((prev) => ({ ...prev, rede, loja: "todas", setor: "todos" }))
+              }
+            >
+              <SelectTrigger><SelectValue placeholder="Rede" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as redes</SelectItem>
+                {copyOptions.redes.map((rede) => (
+                  <SelectItem key={rede} value={rede}>{rede}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={copyFilters.loja}
+              onValueChange={(loja) => setCopyFilters((prev) => ({ ...prev, loja }))}
+            >
+              <SelectTrigger><SelectValue placeholder="Loja" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as lojas</SelectItem>
+                {copyOptions.lojas.map((loja) => (
+                  <SelectItem key={loja} value={loja}>{loja}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={copyFilters.setor}
+              onValueChange={(setor) => setCopyFilters((prev) => ({ ...prev, setor }))}
+            >
+              <SelectTrigger><SelectValue placeholder="Setor" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os setores</SelectItem>
+                {copyOptions.setores.map((setor) => (
+                  <SelectItem key={setor} value={setor}>{setor}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              type="date"
+              value={copyFilters.dia}
+              onChange={(e) => setCopyFilters((prev) => ({ ...prev, dia: e.target.value }))}
+            />
+            <Select
+              value={copyFilters.horario}
+              onValueChange={(horario) => setCopyFilters((prev) => ({ ...prev, horario }))}
+            >
+              <SelectTrigger><SelectValue placeholder="Horário" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os horários</SelectItem>
+                {copyOptions.horarios.map((horario) => (
+                  <SelectItem key={horario} value={horario}>{horario}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Textarea
+            className="min-h-72 font-mono text-sm"
+            value={copyDraft}
+            onChange={(e) => setCopyDraft(e.target.value)}
+            placeholder="O texto pré-salvo aparece aqui e você pode editar antes de copiar..."
+          />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              {demandasNoTexto.length} demanda(s) incluída(s) nesse texto. Você pode editar antes de copiar.
+            </p>
+            <Button
+              onClick={() =>
+                copyToClipboard(
+                  copyDraft,
+                  type === "gerente"
+                    ? "Escala copiada para enviar ao gerente"
+                    : "Vagas disponíveis copiadas",
+                )
+              }
+            >
+              <Copy size={15} className="mr-2" />
+              Copiar texto
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    );
   }
 
   const selectedDates = form.datas.map(fromISODate);
@@ -1221,36 +1384,40 @@ export default function DemandasPage() {
             />
           </div>
           <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
-            <Button
-              type="button"
-              variant="outline"
-              className="gap-2 whitespace-nowrap"
-              disabled={filtered.length === 0}
-              onClick={() =>
-                copyToClipboard(
-                  buildEscalaGerenteText(filtered),
-                  "Escala copiada para enviar ao gerente",
-                )
-              }
+            <Popover
+              open={copyPanel === "gerente"}
+              onOpenChange={(open) => (open ? openCopyPanel("gerente") : setCopyPanel(null))}
             >
-              <Copy size={15} />
-              Copiar escala gerente
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="gap-2 whitespace-nowrap"
-              disabled={!filtered.some((d) => vagasLivresDemanda(d) > 0)}
-              onClick={() =>
-                copyToClipboard(
-                  buildVagasDisponiveisText(filtered),
-                  "Vagas disponíveis copiadas",
-                )
-              }
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2 whitespace-nowrap"
+                  disabled={filtered.length === 0}
+                >
+                  <Copy size={15} />
+                  Copiar escala gerente
+                </Button>
+              </PopoverTrigger>
+              {renderCopyPopoverContent("gerente")}
+            </Popover>
+            <Popover
+              open={copyPanel === "vagas"}
+              onOpenChange={(open) => (open ? openCopyPanel("vagas") : setCopyPanel(null))}
             >
-              <Copy size={15} />
-              Copiar vagas disponíveis
-            </Button>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2 whitespace-nowrap"
+                  disabled={!filtered.some((d) => vagasLivresDemanda(d) > 0)}
+                >
+                  <Copy size={15} />
+                  Copiar vagas disponíveis
+                </Button>
+              </PopoverTrigger>
+              {renderCopyPopoverContent("vagas")}
+            </Popover>
           </div>
         </div>
       </div>
@@ -1695,6 +1862,46 @@ function DemandaCard({
     setReposicaoSearch("");
   }
 
+  async function copiarEscalaAlocacao(alocacao: DemandaAlocacao) {
+    const templates = getCopyTemplates();
+    const diaristaId = alocacao.reposicao?.diaristaId || alocacao.diaristaId;
+    const diarista = diaristas.find((d) => d.id === diaristaId);
+    const nome = nomeEfetivoAlocacao(alocacao);
+    const diarias = `• ${formatDiaCompleto(demanda.data)}
+  ${horarioDemanda(demanda) || "Sem horário"}
+  ${demanda.rede ? `${demanda.rede} - ` : ""}${demanda.loja}
+  Setor: ${demanda.setor}${alocacao.reposicao ? "\n  Reposição de falta" : ""}`;
+    const texto = applyTemplate(templates.escalaDiarista, {
+      Diarista: nome,
+      Telefone: telefoneEfetivoAlocacao(alocacao, diaristas),
+      CPF: diarista?.cpf || "",
+      Bairro: diarista?.bairro || "",
+      Setores: diarista?.setorExperiencia.join(", ") || demanda.setor || "",
+      TotalDiarias: 1,
+      Diarias: diarias,
+      FaltaTexto: templates.textoFalta,
+    });
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(texto);
+      } else {
+        const area = document.createElement("textarea");
+        area.value = texto;
+        area.style.position = "fixed";
+        area.style.left = "-9999px";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        document.execCommand("copy");
+        document.body.removeChild(area);
+      }
+      toast.success(`Escala de ${nome} copiada`);
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  }
+
   const alocarButton = (
     <Popover open={alocarOpen} onOpenChange={setAlocarOpen}>
       <PopoverTrigger asChild>
@@ -1819,6 +2026,16 @@ function DemandaCard({
                 )}
               </div>
               <div className="flex flex-wrap gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-8 rounded-lg"
+                  onClick={() => copiarEscalaAlocacao(alocacao)}
+                  title="Copiar escala do diarista"
+                >
+                  <Copy size={13} />
+                  Copiar
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"
