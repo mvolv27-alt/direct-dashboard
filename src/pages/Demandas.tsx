@@ -938,7 +938,7 @@ export default function DemandasPage() {
               }
             >
               <SelectTrigger><SelectValue placeholder="Rede" /></SelectTrigger>
-              <SelectContent>
+              <SelectContent side="bottom" align="start" avoidCollisions={false} className="z-[220]">
                 <SelectItem value="todas">Todas as redes</SelectItem>
                 {copyOptions.redes.map((rede) => (
                   <SelectItem key={rede} value={rede}>{rede}</SelectItem>
@@ -950,7 +950,7 @@ export default function DemandasPage() {
               onValueChange={(loja) => setCopyFilters((prev) => ({ ...prev, loja }))}
             >
               <SelectTrigger><SelectValue placeholder="Loja" /></SelectTrigger>
-              <SelectContent>
+              <SelectContent side="bottom" align="start" avoidCollisions={false} className="z-[220]">
                 <SelectItem value="todas">Todas as lojas</SelectItem>
                 {copyOptions.lojas.map((loja) => (
                   <SelectItem key={loja} value={loja}>{loja}</SelectItem>
@@ -962,7 +962,7 @@ export default function DemandasPage() {
               onValueChange={(setor) => setCopyFilters((prev) => ({ ...prev, setor }))}
             >
               <SelectTrigger><SelectValue placeholder="Setor" /></SelectTrigger>
-              <SelectContent>
+              <SelectContent side="bottom" align="start" avoidCollisions={false} className="z-[220]">
                 <SelectItem value="todos">Todos os setores</SelectItem>
                 {copyOptions.setores.map((setor) => (
                   <SelectItem key={setor} value={setor}>{setor}</SelectItem>
@@ -979,7 +979,7 @@ export default function DemandasPage() {
               onValueChange={(horario) => setCopyFilters((prev) => ({ ...prev, horario }))}
             >
               <SelectTrigger><SelectValue placeholder="Horário" /></SelectTrigger>
-              <SelectContent>
+              <SelectContent side="bottom" align="start" avoidCollisions={false} className="z-[220]">
                 <SelectItem value="todos">Todos os horários</SelectItem>
                 {copyOptions.horarios.map((horario) => (
                   <SelectItem key={horario} value={horario}>{horario}</SelectItem>
@@ -1814,6 +1814,8 @@ function DemandaCard({
   const [reposicaoOpen, setReposicaoOpen] = useState<string | null>(null);
   const [reposicaoSearch, setReposicaoSearch] = useState("");
   const [reposicaoForm, setReposicaoForm] = useState({ nome: "", telefone: "", observacoes: "", diaristaId: "" });
+  const [escalaOpen, setEscalaOpen] = useState<string | null>(null);
+  const [escalaDraft, setEscalaDraft] = useState("");
   const vagas = Math.max(1, demanda.tarefasTotal || 1);
   const alocacoes = normalizeAlocacoes(demanda);
   const vagasLivres = Math.max(0, vagas - alocacoes.length);
@@ -1862,7 +1864,7 @@ function DemandaCard({
     setReposicaoSearch("");
   }
 
-  async function copiarEscalaAlocacao(alocacao: DemandaAlocacao) {
+  function buildEscalaAlocacaoText(alocacao: DemandaAlocacao) {
     const templates = getCopyTemplates();
     const diaristaId = alocacao.reposicao?.diaristaId || alocacao.diaristaId;
     const diarista = diaristas.find((d) => d.id === diaristaId);
@@ -1871,7 +1873,7 @@ function DemandaCard({
   ${horarioDemanda(demanda) || "Sem horário"}
   ${demanda.rede ? `${demanda.rede} - ` : ""}${demanda.loja}
   Setor: ${demanda.setor}${alocacao.reposicao ? "\n  Reposição de falta" : ""}`;
-    const texto = applyTemplate(templates.escalaDiarista, {
+    return applyTemplate(templates.escalaDiarista, {
       Diarista: nome,
       Telefone: telefoneEfetivoAlocacao(alocacao, diaristas),
       CPF: diarista?.cpf || "",
@@ -1881,13 +1883,21 @@ function DemandaCard({
       Diarias: diarias,
       FaltaTexto: templates.textoFalta,
     });
+  }
 
+  function openEscalaAlocacao(alocacao: DemandaAlocacao) {
+    setEscalaDraft(buildEscalaAlocacaoText(alocacao));
+    setEscalaOpen(alocacao.id);
+  }
+
+  async function copiarEscalaDraft(alocacao: DemandaAlocacao) {
+    const nome = nomeEfetivoAlocacao(alocacao);
     try {
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(texto);
+        await navigator.clipboard.writeText(escalaDraft);
       } else {
         const area = document.createElement("textarea");
-        area.value = texto;
+        area.value = escalaDraft;
         area.style.position = "fixed";
         area.style.left = "-9999px";
         document.body.appendChild(area);
@@ -1897,6 +1907,7 @@ function DemandaCard({
         document.body.removeChild(area);
       }
       toast.success(`Escala de ${nome} copiada`);
+      setEscalaOpen(null);
     } catch {
       toast.error("Não foi possível copiar");
     }
@@ -2026,16 +2037,43 @@ function DemandaCard({
                 )}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 h-8 rounded-lg"
-                  onClick={() => copiarEscalaAlocacao(alocacao)}
-                  title="Copiar escala do diarista"
+                <Popover
+                  open={escalaOpen === alocacao.id}
+                  onOpenChange={(open) => (open ? openEscalaAlocacao(alocacao) : setEscalaOpen(null))}
                 >
-                  <Copy size={13} />
-                  Copiar
-                </Button>
+                  <PopoverTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 h-8 rounded-lg"
+                      title="Copiar escala do diarista"
+                    >
+                      <Copy size={13} />
+                      Copiar
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="z-[120] w-[min(92vw,520px)] rounded-2xl p-3" align="end" sideOffset={8}>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">
+                          Confirmar escala de {nomeEfetivoAlocacao(alocacao)}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Texto pré-salvo das configurações. Revise e edite antes de copiar.
+                        </p>
+                      </div>
+                      <Textarea
+                        className="min-h-56 font-mono text-xs"
+                        value={escalaDraft}
+                        onChange={(e) => setEscalaDraft(e.target.value)}
+                      />
+                      <Button className="w-full" size="sm" onClick={() => copiarEscalaDraft(alocacao)}>
+                        <Copy size={14} className="mr-2" />
+                        Copiar escala
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Button
                   size="sm"
                   variant="outline"
