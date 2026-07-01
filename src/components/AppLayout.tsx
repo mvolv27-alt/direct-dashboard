@@ -22,7 +22,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import ThemeToggle from "@/components/ThemeToggle";
-import PwaInstallButton from "@/components/PwaInstallButton";
 
 const navItems = [
   { to: "/demandas", label: "Demandas", icon: ClipboardList },
@@ -142,9 +141,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <div className={compact ? "flex justify-center" : "flex justify-start"}>
                 <ThemeToggle />
               </div>
-              <div className="flex justify-center">
-                <PwaInstallButton compact />
-              </div>
             </div>
           )}
         </aside>
@@ -159,12 +155,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <p className="truncate text-[11px] text-muted-foreground">Gestão de diaristas</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <PwaInstallButton compact />
                 <ThemeToggle />
               </div>
             </div>
           </div>
-          <div className="app-content p-3 pt-20 sm:p-6 sm:pt-6 lg:pl-24 overflow-auto safe-bottom animate-fade-in">{children}</div>
+          <div className="app-content p-3 pt-20 sm:p-6 sm:pt-6 lg:pl-7 lg:pr-6 overflow-auto safe-bottom animate-fade-in">{children}</div>
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/92 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden">

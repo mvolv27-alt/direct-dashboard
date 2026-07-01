@@ -94,6 +94,18 @@ function diaristaToRow(d: Diarista) {
 }
 
 function demandaFromRow(r: any): Demanda {
+  let observacoes = r.observacoes ?? "";
+  let alocacoes: Demanda["alocacoes"] = undefined;
+  try {
+    const meta = JSON.parse(observacoes);
+    if (meta?.__directMeta === 1) {
+      observacoes = meta.observacoes ?? "";
+      alocacoes = Array.isArray(meta.alocacoes) ? meta.alocacoes : undefined;
+    }
+  } catch {
+    /* observacoes antigas em texto puro */
+  }
+
   return {
     id: r.id,
     codigo: r.codigo ?? "",
@@ -111,11 +123,18 @@ function demandaFromRow(r: any): Demanda {
     status: (r.status ?? "pendente") as Demanda["status"],
     checkInAt: r.check_in_at ?? undefined,
     checkInBy: r.check_in_by || undefined,
-    observacoes: r.observacoes ?? "",
+    alocacoes,
+    observacoes,
     createdAt: r.created_at ?? new Date().toISOString(),
   };
 }
 function demandaToRow(d: Demanda) {
+  const observacoes = JSON.stringify({
+    __directMeta: 1,
+    observacoes: d.observacoes ?? "",
+    alocacoes: d.alocacoes ?? [],
+  });
+
   return {
     id: d.id,
     codigo: d.codigo ?? "",
@@ -134,7 +153,7 @@ function demandaToRow(d: Demanda) {
     status: d.status ?? "pendente",
     check_in_at: d.checkInAt ?? null,
     check_in_by: d.checkInBy ?? "",
-    observacoes: d.observacoes ?? "",
+    observacoes,
   };
 }
 

@@ -3,6 +3,12 @@ import { getDemandas, getDiaristas, saveDiarista, deleteDiarista, updateDiarista
 import { useLiveData } from "@/lib/sync";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { Demanda, Diarista, calcularAvaliacao } from "@/types";
+import {
+  formatDiaCompleto,
+  getCopyTemplates,
+  horarioDemanda,
+  applyTemplate,
+} from "@/lib/copyTemplates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Search, Star, FileText, Phone, MapPin, Briefcase, Calendar, MessageCircle, History } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Star, FileText, Phone, MapPin, Briefcase, Calendar, MessageCircle, History, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 function generateId() {
@@ -106,6 +112,7 @@ function getStatsDiarista(demandas: Demanda[], diaristaId: string) {
   return demandas.reduce(
     (acc, demanda) => {
       for (const alocacao of getAlocacoesDemanda(demanda)) {
+        if (alocacao.reposicao?.diaristaId === diaristaId) acc.presencas += 1;
         if (alocacao.diaristaId !== diaristaId) continue;
         if (alocacao.status === "presente") acc.presencas += 1;
         if (alocacao.status === "falta") acc.faltas += 1;
@@ -263,16 +270,71 @@ export default function DiaristaPage() {
     toast.success("Diarista removido");
   }
 
-  function getHistorico(diaristaId: string): HistoricoItem[] {
-    const feitasPorDemandas = demandas
+  async function copyToClipboard(texto: string, successMessage: string) {
+    if (!texto.trim()) {
+      toast.error("Nenhuma diária encontrada para copiar");
+      return;
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(texto);
+      } else {
+        const area = document.createElement("textarea");
+        area.value = texto;
+        area.style.position = "fixed";
+        area.style.left = "-9999px";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        document.execCommand("copy");
+        document.body.removeChild(area);
+      }
+      toast.success(successMessage);
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  }
+
+  function buildEscalaDiarista(diarista: Diarista) {
+    const templates = getCopyTemplates();
+    const diarias = demandas
       .flatMap((d) =>
         getAlocacoesDemanda(d)
           .filter(
-            (alocacao) =>
-              alocacao.diaristaId === diaristaId &&
-              (alocacao.status === "presente" || alocacao.status === "falta"),
+            (a) =>
+              a.diaristaId === diarista.id ||
+              a.reposicao?.diaristaId === diarista.id ||
+              a.diaristaNome.trim().toLowerCase() === diarista.nome.trim().toLowerCase() ||
+              a.reposicao?.diaristaNome.trim().toLowerCase() === diarista.nome.trim().toLowerCase(),
           )
-          .map((alocacao) => ({
+          .map((a) => {
+            const reposicao = a.reposicao?.diaristaId === diarista.id || a.reposicao?.diaristaNome === diarista.nome;
+            return `• ${formatDiaCompleto(d.data)}\n  ${horarioDemanda(d) || "Sem horário"}\n  ${d.rede ? `${d.rede} - ` : ""}${d.loja}\n  Setor: ${d.setor}${reposicao ? "\n  Reposição de falta" : ""}`;
+          }),
+      )
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+    return applyTemplate(templates.escalaDiarista, {
+      Diarista: diarista.nome,
+      Telefone: diarista.telefone || "",
+      CPF: diarista.cpf || "",
+      Bairro: diarista.bairro || "",
+      Setores: diarista.setorExperiencia.join(", ") || "Sem setor",
+      TotalDiarias: diarias.length,
+      Diarias: diarias.join("\n\n") || "Nenhuma diária alocada.",
+      FaltaTexto: templates.textoFalta,
+    });
+  }
+
+  function getHistorico(diaristaId: string): HistoricoItem[] {
+    const feitasPorDemandas = demandas.flatMap((d) =>
+      getAlocacoesDemanda(d).flatMap((alocacao) => {
+        const items: HistoricoItem[] = [];
+        if (
+          alocacao.diaristaId === diaristaId &&
+          (alocacao.status === "presente" || alocacao.status === "falta")
+        ) {
+          items.push({
             id: `demanda-${d.id}-${alocacao.id}`,
             data: d.data,
             horario: d.horario,
@@ -281,8 +343,23 @@ export default function DiaristaPage() {
             valor: d.valor || 0,
             origem: "Demanda" as const,
             status: alocacao.status === "falta" ? ("faltou" as const) : ("presente" as const),
-          })),
-      );
+          });
+        }
+        if (alocacao.reposicao?.diaristaId === diaristaId) {
+          items.push({
+            id: `reposicao-${d.id}-${alocacao.id}`,
+            data: d.data,
+            horario: d.horario,
+            loja: d.loja,
+            setor: d.setor,
+            valor: d.valor || 0,
+            origem: "Demanda" as const,
+            status: "presente" as const,
+          });
+        }
+        return items;
+      }),
+    );
     const feitasPorRegistros = registros
       .filter((r) => r.diaristaId === diaristaId)
       .map((r) => ({
@@ -534,6 +611,13 @@ export default function DiaristaPage() {
                       Histórico
                     </button>
                     <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => copyToClipboard(buildEscalaDiarista(d), "Escala do diarista copiada")}
+                      title="Copiar confirmação de diárias"
+                      className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+                    >
+                      <Copy size={15} />
+                    </button>
                     <button
                       onClick={() => handleEdit(d)}
                       title="Editar"

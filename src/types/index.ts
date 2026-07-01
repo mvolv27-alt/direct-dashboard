@@ -40,12 +40,21 @@ export type DemandaStatus = "pendente" | "em_andamento" | "concluida" | "falta";
 
 export type DemandaAlocacaoStatus = "pendente" | "presente" | "falta";
 
+export interface DemandaReposicao {
+  diaristaId?: string;
+  diaristaNome: string;
+  telefone?: string;
+  observacoes?: string;
+  criadoEm: string;
+}
+
 export interface DemandaAlocacao {
   id: string;
   diaristaId: string;
   diaristaNome: string;
   status: DemandaAlocacaoStatus;
   marcadoEm?: string;
+  reposicao?: DemandaReposicao;
 }
 
 export interface Demanda {

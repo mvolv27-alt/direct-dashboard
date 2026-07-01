@@ -42,8 +42,8 @@ const registroTotal = (r: RegistroFinanceiro) =>
 function getVagaStats(d: Demanda) {
   const vagas = Math.max(1, d.tarefasTotal || d.alocacoes?.length || 1);
   const alocacoes = Array.isArray(d.alocacoes) ? d.alocacoes : [];
-  let presentes = alocacoes.filter((a) => a.status === "presente").length;
-  let faltas = alocacoes.filter((a) => a.status === "falta").length;
+  let presentes = alocacoes.filter((a) => a.status === "presente" || a.reposicao).length;
+  let faltas = alocacoes.filter((a) => a.status === "falta" && !a.reposicao).length;
 
   if (alocacoes.length === 0) {
     presentes = d.status === "concluida" ? vagas : 0;

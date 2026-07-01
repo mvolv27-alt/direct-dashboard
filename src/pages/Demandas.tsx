@@ -9,6 +9,13 @@ import {
   getSetoresCustom,
 } from "@/lib/storage";
 import { Demanda, DemandaAlocacao, DemandaStatus, Diarista } from "@/types";
+import {
+  formatDiaCompleto,
+  getCopyTemplates,
+  horarioDemanda,
+  nomeEfetivoAlocacao,
+  applyTemplate,
+} from "@/lib/copyTemplates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,12 +56,13 @@ import {
   ChevronRight,
   UserCheck,
   UserX,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
 const SETORES_PADRAO = [
-  "AÃ§ougueiro",
-  "Balconista de AÃ§ougue",
+  "Açougueiro",
+  "Balconista de Açougue",
   "Balconista de Frios",
   "Balconista de Padaria",
   "Forneiro",
@@ -198,8 +206,8 @@ function normalizeAlocacoes(d: Demanda): DemandaAlocacao[] {
 
 function demandaStatusFromAlocacoes(alocacoes: DemandaAlocacao[], vagas: number): DemandaStatus {
   if (alocacoes.length === 0) return "pendente";
-  const presentes = alocacoes.filter((a) => a.status === "presente").length;
-  const faltas = alocacoes.filter((a) => a.status === "falta").length;
+  const presentes = alocacoes.filter((a) => a.status === "presente" || a.reposicao).length;
+  const faltas = alocacoes.filter((a) => a.status === "falta" && !a.reposicao).length;
   const marcadas = presentes + faltas;
   if (marcadas === 0) return "pendente";
   if (presentes === vagas) return "concluida";
@@ -243,7 +251,7 @@ function groupDemandasForCopy(demandas: Demanda[]) {
     const loja = demandaLoja(d);
     const setor = demandaSetor(d);
     const dia = d.data || "Sem data";
-    const horario = d.horario?.trim() || "Sem horÃ¡rio";
+    const horario = d.horario?.trim() || "Sem horário";
 
     if (!grupos.has(rede)) grupos.set(rede, new Map());
     const lojas = grupos.get(rede)!;
@@ -263,94 +271,101 @@ function sortedKeys<T>(map: Map<string, T>) {
   return Array.from(map.keys()).sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
 }
 
+function demandaLineValues(demandas: Demanda[]) {
+  const first = demandas[0];
+  const vagasLivres = demandas.reduce((sum, d) => sum + vagasLivresDemanda(d), 0);
+  const totalVagas = demandas.reduce((sum, d) => sum + totalVagasDemanda(d), 0);
+  const diaristasLinha = demandas
+    .flatMap((d) => {
+      const alocacoes = normalizeAlocacoes(d);
+      const linhas = alocacoes.map((a) => {
+        const nome = nomeEfetivoAlocacao(a);
+        const status =
+          a.status === "presente" || a.reposicao
+            ? "✅"
+            : a.status === "falta"
+              ? "❌"
+              : "⏳";
+        const reposicao = a.reposicao ? ` (reposição de ${a.diaristaNome})` : "";
+        return `${status} ${nome}${reposicao}`;
+      });
+      const livres = vagasLivresDemanda(d);
+      if (livres > 0) {
+        linhas.push(`• ${livres} ${livres === 1 ? "vaga livre" : "vagas livres"}`);
+      }
+      return linhas;
+    })
+    .join("\n");
+
+  return {
+    Rede: demandaRede(first),
+    Loja: demandaLoja(first),
+    Setor: demandaSetor(first),
+    Dia: formatDiaCompleto(first.data),
+    Data: first.data || "",
+    Horario: horarioDemanda(first) || "Sem horário",
+    Entrada: first.horario || "",
+    Saida: first.horarioSaida || "",
+    Codigo: first.codigo || "",
+    Valor: first.valor
+      ? first.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+      : "",
+    Endereco: first.endereco || "",
+    Diaristas: diaristasLinha || "Sem diarista alocado",
+    VagasLivres: `${vagasLivres} ${vagasLivres === 1 ? "vaga livre" : "vagas livres"}`,
+    TotalVagas: `${totalVagas}`,
+  };
+}
+
 function buildEscalaGerenteText(demandas: Demanda[]) {
   if (demandas.length === 0) return "";
-  const linhas = ["ðŸ“‹ *ESCALA DE DIARISTAS*", ""];
+  const template = getCopyTemplates().escalaGerente;
   const grupos = groupDemandasForCopy(demandas);
+  const blocos: string[] = [];
 
   for (const rede of sortedKeys(grupos)) {
-    if (linhas.length > 2) linhas.push("");
-    linhas.push(`ðŸ¬ *Rede:* ${rede}`);
     const lojas = grupos.get(rede)!;
     for (const loja of sortedKeys(lojas)) {
-      linhas.push("");
-      linhas.push(`ðŸ“ *Loja:* ${loja}`);
       const setores = lojas.get(loja)!;
       for (const setor of sortedKeys(setores)) {
-        linhas.push("");
-        linhas.push(`ðŸ§© *Setor:* ${setor}`);
         const dias = setores.get(setor)!;
         for (const dia of sortedKeys(dias)) {
-          linhas.push("");
-          linhas.push(`ðŸ“… *Dia:* ${formatDiaEscala(dia)}`);
           const horarios = dias.get(dia)!;
           for (const horario of sortedKeys(horarios)) {
-            const demandasHorario = horarios.get(horario)!;
-            const totalVagas = demandasHorario.reduce((sum, d) => sum + totalVagasDemanda(d), 0);
-            linhas.push("");
-            linhas.push(`ðŸ•’ *HorÃ¡rio:* ${horario} - ${totalVagas} vaga${totalVagas !== 1 ? "s" : ""}`);
-            for (const demanda of demandasHorario) {
-              const alocacoes = normalizeAlocacoes(demanda);
-              if (alocacoes.length === 0) {
-                linhas.push(`â€¢ ${totalVagasDemanda(demanda)} vaga${totalVagasDemanda(demanda) !== 1 ? "s" : ""} sem diarista`);
-              } else {
-                alocacoes.forEach((alocacao) => {
-                  const statusIcon =
-                    alocacao.status === "presente" ? "âœ…" : alocacao.status === "falta" ? "âŒ" : "â³";
-                  linhas.push(`${statusIcon} ${alocacao.diaristaNome}`);
-                });
-                const livres = vagasLivresDemanda(demanda);
-                if (livres > 0) {
-                  linhas.push(`â€¢ ${livres} vaga${livres !== 1 ? "s" : ""} sem diarista`);
-                }
-              }
-            }
+            blocos.push(applyTemplate(template, demandaLineValues(horarios.get(horario)!)));
           }
         }
-        linhas.push("");
       }
     }
   }
 
-  return linhas.join("\n").trim();
+  return blocos.join("\n\n").trim();
 }
 
 function buildVagasDisponiveisText(demandas: Demanda[]) {
   const disponiveis = demandas.filter((d) => vagasLivresDemanda(d) > 0);
   if (disponiveis.length === 0) return "";
-  const linhas = ["ðŸŸ¢ *VAGAS DISPONÃVEIS*", ""];
+  const template = getCopyTemplates().vagasDisponiveis;
   const grupos = groupDemandasForCopy(disponiveis);
+  const blocos: string[] = [];
 
   for (const rede of sortedKeys(grupos)) {
-    if (linhas.length > 2) linhas.push("");
-    linhas.push(`ðŸ¬ *Rede:* ${rede}`);
     const lojas = grupos.get(rede)!;
     for (const loja of sortedKeys(lojas)) {
-      linhas.push("");
-      linhas.push(`ðŸ“ *Loja:* ${loja}`);
       const setores = lojas.get(loja)!;
       for (const setor of sortedKeys(setores)) {
-        linhas.push("");
-        linhas.push(`ðŸ§© *Setor:* ${setor}`);
         const dias = setores.get(setor)!;
         for (const dia of sortedKeys(dias)) {
-          linhas.push("");
-          linhas.push(`ðŸ“… *Dia:* ${formatDiaEscala(dia)}`);
           const horarios = dias.get(dia)!;
           for (const horario of sortedKeys(horarios)) {
-            const demandasHorario = horarios.get(horario)!;
-            const vagas = demandasHorario.reduce((sum, d) => sum + vagasLivresDemanda(d), 0);
-            linhas.push("");
-            linhas.push(`ðŸ•’ *HorÃ¡rio:* ${horario}`);
-            linhas.push(`â€¢ ${vagas} ${vagas === 1 ? "vaga disponÃ­vel" : "vagas disponÃ­veis"}`);
+            blocos.push(applyTemplate(template, demandaLineValues(horarios.get(horario)!)));
           }
         }
-        linhas.push("");
       }
     }
   }
 
-  return linhas.join("\n").trim();
+  return blocos.join("\n\n").trim();
 }
 
 export default function DemandasPage() {
@@ -528,7 +543,7 @@ export default function DemandasPage() {
 
   async function copyToClipboard(texto: string, successMessage: string) {
     if (!texto.trim()) {
-      toast.error("Nenhuma informaÃ§Ã£o encontrada para copiar");
+      toast.error("Nenhuma informação encontrada para copiar");
       return;
     }
     try {
@@ -547,18 +562,18 @@ export default function DemandasPage() {
       }
       toast.success(successMessage);
     } catch {
-      toast.error("NÃ£o foi possÃ­vel copiar");
+      toast.error("Não foi possível copiar");
     }
   }
 
   function handleSelectFormDiarista(d: Diarista) {
     const vagas = Math.max(1, Math.floor(form.vagas || 1));
     if (form.alocacoes.some((a) => a.diaristaId === d.id)) {
-      toast.error(`${d.nome} jÃ¡ foi selecionado`);
+      toast.error(`${d.nome} já foi selecionado`);
       return;
     }
     if (form.alocacoes.length >= vagas) {
-      toast.error("A quantidade de diaristas jÃ¡ atingiu o nÃºmero de vagas");
+      toast.error("A quantidade de diaristas já atingiu o número de vagas");
       return;
     }
     const next = [
@@ -592,7 +607,7 @@ export default function DemandasPage() {
 
   function handleSave() {
     if (!form.loja || form.datas.length === 0 || !form.setor) {
-      toast.error("Loja, data e setor sÃ£o obrigatÃ³rios");
+      toast.error("Loja, data e setor são obrigatórios");
       return;
     }
     const vagas = Math.max(1, Math.floor(form.vagas || 1));
@@ -684,7 +699,7 @@ export default function DemandasPage() {
     if (!confirm("Excluir esta demanda?")) return;
     deleteDemanda(id);
     refresh();
-    toast.success("Demanda excluÃ­da");
+    toast.success("Demanda excluída");
   }
 
   function handleRenameRede(rede: string) {
@@ -701,7 +716,7 @@ export default function DemandasPage() {
     const itens = demandas.filter(
       (d) => ((d.rede || d.cliente || "Sem rede").trim() || "Sem rede") === rede
     );
-    if (!confirm(`Excluir ${itens.length} diÃ¡ria(s) da rede ${rede}?`)) return;
+    if (!confirm(`Excluir ${itens.length} diária(s) da rede ${rede}?`)) return;
     itens.forEach((d) => deleteDemanda(d.id));
     refresh();
     toast.success("Rede removida");
@@ -727,7 +742,7 @@ export default function DemandasPage() {
       const dLoja = (d.loja || "Sem loja").trim() || "Sem loja";
       return dRede === rede && dLoja === loja;
     });
-    if (!confirm(`Excluir ${itens.length} diÃ¡ria(s) da loja ${loja}?`)) return;
+    if (!confirm(`Excluir ${itens.length} diária(s) da loja ${loja}?`)) return;
     itens.forEach((d) => deleteDemanda(d.id));
     refresh();
     toast.success("Loja removida");
@@ -740,9 +755,16 @@ export default function DemandasPage() {
   ) {
     const vagas = Math.max(1, d.tarefasTotal || 1);
     const alocacoes = normalizeAlocacoes(d).map((a) =>
-      a.id === alocacaoId ? { ...a, status, marcadoEm: new Date().toISOString() } : a
+      a.id === alocacaoId
+        ? {
+            ...a,
+            status,
+            marcadoEm: new Date().toISOString(),
+            reposicao: status === "presente" ? undefined : a.reposicao,
+          }
+        : a
     );
-    const tarefasConcluidas = alocacoes.filter((a) => a.status === "presente").length;
+    const tarefasConcluidas = alocacoes.filter((a) => a.status === "presente" || a.reposicao).length;
     updateDemanda({
       ...d,
       alocacoes,
@@ -760,15 +782,54 @@ export default function DemandasPage() {
     }
   }
 
+  function handleReposicaoAlocacao(
+    d: Demanda,
+    alocacaoId: string,
+    reposicao: { diaristaId?: string; diaristaNome: string; telefone?: string; observacoes?: string },
+  ) {
+    const nome = reposicao.diaristaNome.trim();
+    if (!nome) {
+      toast.error("Informe o nome do diarista da reposição");
+      return;
+    }
+    const vagas = Math.max(1, d.tarefasTotal || 1);
+    const alocacoes = normalizeAlocacoes(d).map((a) =>
+      a.id === alocacaoId
+        ? {
+            ...a,
+            status: "falta" as const,
+            marcadoEm: a.marcadoEm || new Date().toISOString(),
+            reposicao: {
+              diaristaId: reposicao.diaristaId,
+              diaristaNome: nome,
+              telefone: reposicao.telefone?.trim(),
+              observacoes: reposicao.observacoes?.trim(),
+              criadoEm: new Date().toISOString(),
+            },
+          }
+        : a,
+    );
+    updateDemanda({
+      ...d,
+      alocacoes,
+      status: demandaStatusFromAlocacoes(alocacoes, vagas),
+      checkInAt: new Date().toISOString(),
+      checkInBy: nome,
+      tarefasConcluidas: alocacoes.filter((a) => a.status === "presente" || a.reposicao).length,
+    });
+    refresh();
+    toast.success(`Reposição registrada com ${nome}`);
+  }
+
   function handleAlocarDiarista(d: Demanda, diaristaId: string, diaristaNome: string) {
     const vagas = Math.max(1, d.tarefasTotal || 1);
     const alocacoes = normalizeAlocacoes(d);
     if (alocacoes.some((a) => a.diaristaId === diaristaId)) {
-      toast.error(`${diaristaNome} jÃ¡ estÃ¡ nessa demanda`);
+      toast.error(`${diaristaNome} já está nessa demanda`);
       return;
     }
     if (alocacoes.length >= vagas) {
-      toast.error("Todas as vagas dessa demanda jÃ¡ foram preenchidas");
+      toast.error("Todas as vagas dessa demanda já foram preenchidas");
       return;
     }
     const next = [
@@ -801,7 +862,7 @@ export default function DemandasPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Demandas</h1>
           <p className="text-sm text-muted-foreground">
-            Acompanhe as diÃ¡rias de supermercado
+            Acompanhe as diárias de supermercado
           </p>
         </div>
         <Dialog
@@ -895,7 +956,7 @@ export default function DemandasPage() {
                 )}
               </div>
 
-              {/* HorÃ¡rios & Valor */}
+              {/* Horários & Valor */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="grid gap-1.5 min-w-0">
                   <Label>Entrada</Label>
@@ -913,7 +974,7 @@ export default function DemandasPage() {
                   </datalist>
                 </div>
                 <div className="grid gap-1.5 min-w-0">
-                  <Label>SaÃ­da</Label>
+                  <Label>Saída</Label>
                   <Input
                     className="h-10 rounded-lg"
                     list="demanda-horarios-saida-salvos"
@@ -994,7 +1055,7 @@ export default function DemandasPage() {
                     list="demanda-redes-salvas"
                     value={form.rede}
                     onChange={(e) => setForm({ ...form, rede: e.target.value })}
-                    placeholder="Ex: PÃ£o de AÃ§Ãºcar"
+                    placeholder="Ex: Pão de Açúcar"
                   />
                 </div>
                 <div className="grid gap-1.5">
@@ -1126,7 +1187,7 @@ export default function DemandasPage() {
               </div>
 
               <Button onClick={handleSave} className="w-full mt-2">
-                {editingId ? "Salvar AlteraÃ§Ãµes" : "Criar Demanda"}
+                {editingId ? "Salvar Alterações" : "Criar Demanda"}
               </Button>
             </div>
           </DialogContent>
@@ -1135,7 +1196,7 @@ export default function DemandasPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard icon={<Store size={20} />} value={counts.total} label="Total de diÃ¡rias" tone="primary" />
+        <StatCard icon={<Store size={20} />} value={counts.total} label="Total de diárias" tone="primary" />
         <StatCard icon={<CircleDashed size={20} />} value={counts.pendente} label="Aguardando" tone="muted" />
         <StatCard icon={<UserCheck size={20} />} value={counts.presente} label="Presentes" tone="success" />
         <StatCard icon={<UserX size={20} />} value={counts.falta} label="Faltas" tone="warning" />
@@ -1277,7 +1338,7 @@ export default function DemandasPage() {
       </div>
 
 
-      {/* Lista agrupada por Rede > Loja > Setor > HorÃ¡rios */}
+      {/* Lista agrupada por Rede > Loja > Setor > Horários */}
       <div className="space-y-4">
         {filtered.length === 0 ? (
           <div className="glass border-soft rounded-2xl hover-lift p-8 text-center text-muted-foreground text-sm">
@@ -1391,7 +1452,7 @@ export default function DemandasPage() {
                               </button>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <span className="text-[10px] text-muted-foreground">
-                                  {totalLoja} {totalLoja === 1 ? "diÃ¡ria" : "diÃ¡rias"}
+                                  {totalLoja} {totalLoja === 1 ? "diária" : "diárias"}
                                 </span>
                                 <button
                                   type="button"
@@ -1418,7 +1479,7 @@ export default function DemandasPage() {
                                 const arr = setores.get(setor)!;
                                 const horarios = new Map<string, Demanda[]>();
                                 for (const demanda of arr) {
-                                  const horario = demanda.horario?.trim() || "Sem horÃ¡rio";
+                                  const horario = demanda.horario?.trim() || "Sem horário";
                                   if (!horarios.has(horario)) horarios.set(horario, []);
                                   horarios.get(horario)!.push(demanda);
                                 }
@@ -1462,6 +1523,9 @@ export default function DemandasPage() {
                                                   onDelete={() => handleDelete(d.id)}
                                                   onStatusAlocacao={(alocacaoId, status) =>
                                                     handleStatusAlocacao(d, alocacaoId, status)
+                                                  }
+                                                  onReposicao={(alocacaoId, reposicao) =>
+                                                    handleReposicaoAlocacao(d, alocacaoId, reposicao)
                                                   }
                                                   onAlocar={(did, dnome) => {
                                                     handleAlocarDiarista(d, did, dnome);
@@ -1557,6 +1621,7 @@ function DemandaCard({
   onEdit,
   onDelete,
   onStatusAlocacao,
+  onReposicao,
   onAlocar,
 }: {
   demanda: Demanda;
@@ -1564,6 +1629,10 @@ function DemandaCard({
   onEdit: () => void;
   onDelete: () => void;
   onStatusAlocacao: (alocacaoId: string, status: "presente" | "falta") => void;
+  onReposicao: (
+    alocacaoId: string,
+    reposicao: { diaristaId?: string; diaristaNome: string; telefone?: string; observacoes?: string },
+  ) => void;
   onAlocar: (diaristaId: string, diaristaNome: string) => void;
 }) {
   const statusBadge =
@@ -1575,6 +1644,9 @@ function DemandaCard({
 
   const [alocarOpen, setAlocarOpen] = useState(false);
   const [alocarSearch, setAlocarSearch] = useState("");
+  const [reposicaoOpen, setReposicaoOpen] = useState<string | null>(null);
+  const [reposicaoSearch, setReposicaoSearch] = useState("");
+  const [reposicaoForm, setReposicaoForm] = useState({ nome: "", telefone: "", observacoes: "", diaristaId: "" });
   const vagas = Math.max(1, demanda.tarefasTotal || 1);
   const alocacoes = normalizeAlocacoes(demanda);
   const vagasLivres = Math.max(0, vagas - alocacoes.length);
@@ -1589,6 +1661,39 @@ function DemandaCard({
         d.setorExperiencia.some((s) => s.toLowerCase().includes(q))
     );
   }, [diaristas, alocarSearch]);
+
+  const reposicaoDiaristasFiltrados = useMemo(() => {
+    const q = reposicaoSearch.toLowerCase().trim();
+    return diaristas.filter(
+      (d) =>
+        !q ||
+        d.nome.toLowerCase().includes(q) ||
+        d.telefone.includes(q) ||
+        d.bairro.toLowerCase().includes(q),
+    );
+  }, [diaristas, reposicaoSearch]);
+
+  function openReposicao(alocacao: DemandaAlocacao) {
+    setReposicaoForm({
+      nome: alocacao.reposicao?.diaristaNome || "",
+      telefone: alocacao.reposicao?.telefone || "",
+      observacoes: alocacao.reposicao?.observacoes || "",
+      diaristaId: alocacao.reposicao?.diaristaId || "",
+    });
+    setReposicaoSearch("");
+    setReposicaoOpen(alocacao.id);
+  }
+
+  function salvarReposicao(alocacaoId: string) {
+    onReposicao(alocacaoId, {
+      diaristaId: reposicaoForm.diaristaId || undefined,
+      diaristaNome: reposicaoForm.nome,
+      telefone: reposicaoForm.telefone,
+      observacoes: reposicaoForm.observacoes,
+    });
+    setReposicaoOpen(null);
+    setReposicaoSearch("");
+  }
 
   const alocarButton = (
     <Popover open={alocarOpen} onOpenChange={setAlocarOpen}>
@@ -1707,8 +1812,13 @@ function DemandaCard({
                     {alocacao.status === "presente" ? "Presente" : "Falta"}
                   </span>
                 )}
+                {alocacao.reposicao && (
+                  <p className="mt-1 text-[11px] font-medium text-green-700 dark:text-green-300">
+                    Reposição: {alocacao.reposicao.diaristaNome}
+                  </p>
+                )}
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 <Button
                   size="sm"
                   variant="outline"
@@ -1735,6 +1845,84 @@ function DemandaCard({
                   <UserX size={13} />
                   Falta
                 </Button>
+                {alocacao.status === "falta" && (
+                  <Popover
+                    open={reposicaoOpen === alocacao.id}
+                    onOpenChange={(open) => (open ? openReposicao(alocacao) : setReposicaoOpen(null))}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 rounded-lg">
+                        <RefreshCw size={13} />
+                        Reposição
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-3" align="end">
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">Diarista da reposição</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Use um cadastro existente ou digite os dados manualmente.
+                          </p>
+                        </div>
+                        <div className="relative">
+                          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            className="h-9 pl-8"
+                            placeholder="Buscar diarista..."
+                            value={reposicaoSearch}
+                            onChange={(e) => setReposicaoSearch(e.target.value)}
+                          />
+                        </div>
+                        {reposicaoSearch && reposicaoDiaristasFiltrados.length > 0 && (
+                          <div className="max-h-32 overflow-y-auto rounded-lg border border-border/60">
+                            {reposicaoDiaristasFiltrados.slice(0, 6).map((d) => (
+                              <button
+                                key={d.id}
+                                type="button"
+                                className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-muted"
+                                onClick={() => {
+                                  setReposicaoForm({
+                                    nome: d.nome,
+                                    telefone: d.telefone,
+                                    observacoes: reposicaoForm.observacoes,
+                                    diaristaId: d.id,
+                                  });
+                                  setReposicaoSearch("");
+                                }}
+                              >
+                                <span className="font-medium">{d.nome}</span>
+                                <span className="text-muted-foreground">{d.telefone}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <Input
+                          className="h-9"
+                          placeholder="Nome do diarista"
+                          value={reposicaoForm.nome}
+                          onChange={(e) =>
+                            setReposicaoForm({ ...reposicaoForm, nome: e.target.value, diaristaId: "" })
+                          }
+                        />
+                        <Input
+                          className="h-9"
+                          placeholder="Telefone"
+                          value={reposicaoForm.telefone}
+                          onChange={(e) => setReposicaoForm({ ...reposicaoForm, telefone: e.target.value })}
+                        />
+                        <Input
+                          className="h-9"
+                          placeholder="Observação opcional"
+                          value={reposicaoForm.observacoes}
+                          onChange={(e) => setReposicaoForm({ ...reposicaoForm, observacoes: e.target.value })}
+                        />
+                        <Button className="w-full" size="sm" onClick={() => salvarReposicao(alocacao.id)}>
+                          Salvar reposição
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
               </div>
             </div>
           ))}
@@ -1755,16 +1943,16 @@ function DemandaCard({
           <button
             onClick={onEdit}
             className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Editar diÃ¡ria"
-            title="Editar diÃ¡ria"
+            aria-label="Editar diária"
+            title="Editar diária"
           >
             <Pencil size={14} />
           </button>
           <button
             onClick={onDelete}
             className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-            aria-label="Remover diÃ¡ria"
-            title="Remover diÃ¡ria"
+            aria-label="Remover diária"
+            title="Remover diária"
           >
             <Trash2 size={14} />
           </button>

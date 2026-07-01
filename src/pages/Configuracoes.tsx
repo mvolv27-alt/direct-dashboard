@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useLiveData } from "@/lib/sync";
 import { getSetoresCustom, saveSetorCustom } from "@/lib/storage";
 import {
@@ -16,6 +16,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  DEFAULT_COPY_TEMPLATES,
+  getCopyTemplates,
+  saveCopyTemplates,
+  type CopyTemplates,
+} from "@/lib/copyTemplates";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +47,7 @@ import {
   MapPin,
   Copy,
   X,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -70,7 +78,7 @@ export default function ConfiguracoesPage() {
       </div>
 
       <Tabs defaultValue="lojas" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex">
+        <TabsList className="grid w-full grid-cols-4 sm:w-auto sm:inline-flex">
           <TabsTrigger value="lojas" className="gap-1.5">
             <Store size={14} /> Lojas
           </TabsTrigger>
@@ -80,11 +88,15 @@ export default function ConfiguracoesPage() {
           <TabsTrigger value="redes" className="gap-1.5">
             <Network size={14} /> Redes
           </TabsTrigger>
+          <TabsTrigger value="textos" className="gap-1.5">
+            <FileText size={14} /> Textos
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="lojas"><LojasTab /></TabsContent>
         <TabsContent value="setores"><SetoresTab /></TabsContent>
         <TabsContent value="redes"><RedesTab /></TabsContent>
+        <TabsContent value="textos"><TextosTab /></TabsContent>
       </Tabs>
     </div>
   );
@@ -455,6 +467,150 @@ function SetorRow({
         Salvar
       </Button>
     </li>
+  );
+}
+
+/* ============================ TEXTOS ============================ */
+function TextosTab() {
+  const [form, setForm] = useState<CopyTemplates>(getCopyTemplates);
+
+  function updateField(key: keyof CopyTemplates, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleSave() {
+    saveCopyTemplates(form);
+    toast.success("Textos de cópia salvos");
+  }
+
+  function handleReset() {
+    setForm(DEFAULT_COPY_TEMPLATES);
+    saveCopyTemplates(DEFAULT_COPY_TEMPLATES);
+    toast.success("Textos restaurados");
+  }
+
+  const gruposPlaceholders = [
+    {
+      title: "Demandas e gerente",
+      items: [
+        "[Rede]",
+        "[Loja]",
+        "[Setor]",
+        "[Dia]",
+        "[Data]",
+        "[Horario]",
+        "[Entrada]",
+        "[Saida]",
+        "[Codigo]",
+        "[Valor]",
+        "[Endereco]",
+        "[Diaristas]",
+        "[VagasLivres]",
+        "[TotalVagas]",
+      ],
+    },
+    {
+      title: "Diarista",
+      items: [
+        "[Diarista]",
+        "[Telefone]",
+        "[CPF]",
+        "[Bairro]",
+        "[Setores]",
+        "[TotalDiarias]",
+        "[Diarias]",
+        "[FaltaTexto]",
+      ],
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border/60 bg-card p-3">
+        <p className="text-sm font-semibold text-foreground">Placeholders disponíveis</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Use os códigos abaixo entre colchetes. O sistema troca automaticamente pelas informações reais.
+        </p>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          {gruposPlaceholders.map((grupo) => (
+            <div key={grupo.title} className="rounded-lg border border-border/60 p-2">
+              <p className="mb-2 text-xs font-semibold text-foreground">{grupo.title}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {grupo.items.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    onClick={() => navigator.clipboard?.writeText(p)}
+                    title="Copiar placeholder"
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <TemplateBox
+          title="Escala fechada para gerente"
+          description="Texto usado no botão Copiar escala gerente da aba Demandas."
+          value={form.escalaGerente}
+          onChange={(value) => updateField("escalaGerente", value)}
+        />
+        <TemplateBox
+          title="Demandas disponíveis"
+          description="Texto usado no botão Copiar vagas disponíveis da aba Demandas."
+          value={form.vagasDisponiveis}
+          onChange={(value) => updateField("vagasDisponiveis", value)}
+        />
+        <TemplateBox
+          title="Confirmação da escala do diarista"
+          description="Texto usado no botão copiar dentro do card do diarista."
+          value={form.escalaDiarista}
+          onChange={(value) => updateField("escalaDiarista", value)}
+        />
+        <TemplateBox
+          title="Texto explicativo sobre falta"
+          description="Esse texto entra onde você colocar o placeholder [FaltaTexto]."
+          value={form.textoFalta}
+          onChange={(value) => updateField("textoFalta", value)}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <Button variant="outline" onClick={handleReset}>
+          Restaurar padrão
+        </Button>
+        <Button onClick={handleSave}>Salvar textos</Button>
+      </div>
+    </div>
+  );
+}
+
+function TemplateBox({
+  title,
+  description,
+  value,
+  onChange,
+}: {
+  title: string;
+  description?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-card p-3">
+      <Label className="text-sm font-semibold">{title}</Label>
+      {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
+      <Textarea
+        className="mt-2 min-h-40 font-mono text-xs"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
   );
 }
 
