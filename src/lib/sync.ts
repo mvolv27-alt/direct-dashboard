@@ -477,9 +477,11 @@ export async function startSync() {
   });
   window.addEventListener("offline", () => emitStatus());
 
-  // hydrate from cloud
+  // First send local queued writes so data created in local/offline mode reaches the cloud.
+  await flushOutbox();
+  // Then hydrate from cloud with the latest shared data.
   await Promise.all(tables.map(fetchAll));
-  // drain any queued offline writes
+  // Retry anything that could not be sent on the first pass.
   await flushOutbox();
   // realtime subscriptions
   tables.forEach(subscribeRealtime);

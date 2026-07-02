@@ -57,20 +57,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      if (localStorage.getItem(LOCAL_ACCESS_KEY) === "true") return;
+      if (s) {
+        localStorage.removeItem(LOCAL_ACCESS_KEY);
+      } else if (LOCAL_ACCESS_ENABLED && localStorage.getItem(LOCAL_ACCESS_KEY) === "true") {
+        setSession(createLocalSession());
+        setLoading(false);
+        return;
+      }
       setSession(s);
       setLoading(false);
     });
-    if (LOCAL_ACCESS_ENABLED && localStorage.getItem(LOCAL_ACCESS_KEY) === "true") {
-      setSession(createLocalSession());
-      setLoading(false);
-      return () => sub.subscription.unsubscribe();
-    }
     if (!LOCAL_ACCESS_ENABLED) {
       localStorage.removeItem(LOCAL_ACCESS_KEY);
     }
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+      if (data.session) {
+        localStorage.removeItem(LOCAL_ACCESS_KEY);
+        setSession(data.session);
+      } else if (LOCAL_ACCESS_ENABLED && localStorage.getItem(LOCAL_ACCESS_KEY) === "true") {
+        setSession(createLocalSession());
+      } else {
+        setSession(null);
+      }
       setLoading(false);
     });
     return () => sub.subscription.unsubscribe();

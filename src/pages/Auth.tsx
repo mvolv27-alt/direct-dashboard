@@ -24,11 +24,6 @@ export default function Auth() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (mode === "login" && signInLocal(email, password)) {
-      toast.success("Acesso local liberado");
-      navigate("/", { replace: true });
-      return;
-    }
     setLoading(true);
     try {
       if (mode === "signup") {
@@ -44,7 +39,14 @@ export default function Auth() {
         toast.success("Conta criada! Verifique seu e-mail se for solicitado.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (error) {
+          if (signInLocal(email, password)) {
+            toast.warning("Acesso local liberado. Esse modo nao sincroniza com outros dispositivos.");
+            navigate("/", { replace: true });
+            return;
+          }
+          throw error;
+        }
         toast.success("Bem-vindo de volta!");
       }
     } catch (err: unknown) {

@@ -1,6 +1,6 @@
 import type { Demanda, DemandaAlocacao, Diarista } from "@/types";
 
-export const COPY_TEMPLATES_KEY = "direct.copy-templates.v5";
+export const COPY_TEMPLATES_KEY = "direct.copy-templates.v6";
 export const COPY_TEMPLATES_EVENT = "direct:copy-templates-changed";
 
 export type CopyTemplates = {
