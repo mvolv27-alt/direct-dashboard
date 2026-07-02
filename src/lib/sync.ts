@@ -252,6 +252,19 @@ function enqueue(op: OutboxOp) {
   writeOutbox(all);
 }
 
+function localCacheHasRows(table: TableName) {
+  return readCache<unknown>(table).length > 0;
+}
+
+function upsertPayload(table: TableName, payload: DbRow): CloudResult {
+  if (table === "setores_custom") {
+    return supabase
+      .from("setores_custom")
+      .upsert(payload as never, { onConflict: "nome" }) as CloudResult;
+  }
+  return tableQuery(table).upsert(payload as never, { onConflict: "id" }) as CloudResult;
+}
+
 async function flushOutbox(): Promise<void> {
   if (!navigator.onLine) return;
   const all = readOutbox();
@@ -260,7 +273,8 @@ async function flushOutbox(): Promise<void> {
   for (const op of all) {
     try {
       if (op.op === "insert") {
-        await tableQuery(op.table).insert(op.payload as never);
+        const { error } = await upsertPayload(op.table, op.payload);
+        if (error) throw error;
       } else if (op.op === "update") {
         await tableQuery(op.table).update(op.payload as never).eq("id", op.payload.id);
       } else {
@@ -302,7 +316,7 @@ async function cloudInsert<T extends { id: string }>(table: TableName, row: T) {
   upsertInCache(table, row);
   const payload = mappers[table].toRow(row);
   await tryCloud(
-    () => tableQuery(table).insert(payload as never) as CloudResult,
+    () => upsertPayload(table, payload),
     () => enqueue({ table, op: "insert", payload }),
   );
 }
@@ -345,7 +359,10 @@ export async function upsertSetorCustom(nome: string) {
     writeCache("setores_custom", all);
   }
   await tryCloud(
-    () => supabase.from("setores_custom").insert({ nome }) as CloudResult,
+    () =>
+      supabase
+        .from("setores_custom")
+        .upsert({ nome }, { onConflict: "nome" }) as CloudResult,
     () => enqueue({ table: "setores_custom", op: "insert", payload: { nome } }),
   );
 }
@@ -421,8 +438,29 @@ async function fetchAll(table: TableName) {
   const { data, error } = await tableQuery(table).select("*");
   if (error || !data) return;
   const rows = (data as DbRow[]).map(mappers[table].fromRow);
+  if (rows.length === 0 && localCacheHasRows(table)) {
+    emitStatus({ lastSyncedAt: Date.now() });
+    return;
+  }
   writeCache(table, rows);
   emitStatus({ lastSyncedAt: Date.now() });
+}
+
+async function uploadCurrentCacheToCloud(tables: TableName[]) {
+  if (!navigator.onLine) return;
+  for (const table of tables) {
+    const rows = readCache<unknown>(table);
+    for (const row of rows) {
+      const payload = mappers[table].toRow(row);
+      if (table !== "setores_custom" && !payload.id) continue;
+      try {
+        const { error } = await upsertPayload(table, payload);
+        if (error) throw error;
+      } catch {
+        enqueue({ table, op: "insert", payload });
+      }
+    }
+  }
 }
 
 function subscribeRealtime(table: TableName) {
@@ -477,7 +515,8 @@ export async function startSync() {
   });
   window.addEventListener("offline", () => emitStatus());
 
-  // First send local queued writes so data created in local/offline mode reaches the cloud.
+  // First send local cached rows and queued writes so data created in local/offline mode reaches the cloud.
+  await uploadCurrentCacheToCloud(tables);
   await flushOutbox();
   // Then hydrate from cloud with the latest shared data.
   await Promise.all(tables.map(fetchAll));
