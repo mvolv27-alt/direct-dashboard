@@ -1117,11 +1117,11 @@ export default function DemandasPage() {
   const selectedDates = form.datas.map(fromISODate);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Demandas</h1>
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-bold text-foreground">Demandas</h1>
           <p className="text-sm text-muted-foreground">
             Acompanhe as diárias de supermercado
           </p>
@@ -1138,7 +1138,7 @@ export default function DemandasPage() {
           }}
         >
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="w-full justify-center gap-2 sm:w-auto">
               <Plus size={16} />
               Nova Demanda
             </Button>
@@ -1464,8 +1464,8 @@ export default function DemandasPage() {
       </div>
 
       {/* Tabs + Search */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex flex-wrap gap-1 bg-muted/50 p-1 rounded-lg">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted/50 p-1 sm:flex sm:flex-wrap">
           <TabBtn active={tab === "todas"} onClick={() => setTab("todas")} label="Todas" count={counts.total} />
           <TabBtn active={tab === "pendente"} onClick={() => setTab("pendente")} label="Aguardando" count={counts.pendente} />
           <TabBtn active={tab === "concluida"} onClick={() => setTab("concluida")} label="Presentes" count={counts.presente} />
@@ -1481,7 +1481,7 @@ export default function DemandasPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:flex sm:items-center">
             <Popover
               open={copyPanel === "gerente"}
               onOpenChange={(open) => (open ? openCopyPanel("gerente") : setCopyPanel(null))}
@@ -1520,7 +1520,7 @@ export default function DemandasPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 rounded-xl border border-border/60 bg-card/55 p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_160px_auto]">
+      <div className="grid min-w-0 grid-cols-1 gap-2 overflow-hidden rounded-xl border border-border/60 bg-card/55 p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_160px_auto]">
         <Select
           value={redeFilter}
           onValueChange={(value) => {
@@ -1576,9 +1576,23 @@ export default function DemandasPage() {
           </SelectContent>
         </Select>
 
+        <Select value={diaFilter || "todos"} onValueChange={(value) => setDiaFilter(value === "todos" ? "" : value)}>
+          <SelectTrigger className="h-9 rounded-lg sm:hidden">
+            <SelectValue placeholder="Dia" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os dias</SelectItem>
+            {filterOptions.dias.map((dia) => (
+              <SelectItem key={dia} value={dia}>
+                {formatDateBR(dia)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Input
           type="date"
-          className="h-9 rounded-lg"
+          className="hidden h-9 min-w-0 rounded-lg sm:block"
           value={diaFilter}
           onChange={(e) => setDiaFilter(e.target.value)}
           aria-label="Filtrar por dia"

@@ -69,9 +69,9 @@ const fmt = (n: number) =>
 
 export default function ConfiguracoesPage() {
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
+    <div className="space-y-5 min-w-0 overflow-x-hidden">
+      <div className="min-w-0">
+        <h1 className="truncate text-2xl font-bold text-foreground">Configurações</h1>
         <p className="text-sm text-muted-foreground">
           Gerencie lojas, setores e valores do sistema
         </p>

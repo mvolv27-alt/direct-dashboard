@@ -352,11 +352,11 @@ export default function FinanceiroPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Financeiro</h1>
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-bold text-foreground">Financeiro</h1>
           <p className="text-sm text-muted-foreground">
             {registros.length} registro(s)
           </p>
@@ -364,7 +364,7 @@ export default function FinanceiroPage() {
 
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setForm(emptyForm); setEditingId(null); } }}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="w-full justify-center gap-2 sm:w-auto">
               <Plus size={16} />
               Novo Registro
             </Button>

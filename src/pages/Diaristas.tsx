@@ -457,10 +457,10 @@ export default function DiaristaPage() {
   const historyItems = historyFor ? getHistorico(historyFor.id) : [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Diaristas</h1>
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-bold text-foreground">Diaristas</h1>
           <p className="text-sm text-muted-foreground">
             {diaristas.length} cadastrado(s)
           </p>
@@ -468,7 +468,7 @@ export default function DiaristaPage() {
 
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setForm(emptyForm); setEditingId(null); } }}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="w-full justify-center gap-2 sm:w-auto">
               <Plus size={16} />
               Novo Diarista
             </Button>
@@ -583,7 +583,7 @@ export default function DiaristaPage() {
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
+      <div className="relative w-full max-w-sm">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           className="pl-9"
