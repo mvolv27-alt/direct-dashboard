@@ -2055,11 +2055,23 @@ function DemandaCard({
       );
     });
 
-    const diarias = Array.from(blocos.values())
-      .map((grupo) => `\uD83D\uDCCD ${grupo.redeLoja}\n\uD83C\uDFF7\uFE0F ${grupo.setor}\n\n${grupo.linhas.join("\n\n")}`)
+    const gruposEscala = Array.from(blocos.values());
+    const cabecalhoEscala = gruposEscala
+      .map((grupo) => `\uD83D\uDCCD ${grupo.redeLoja}\n\uD83C\uDFF7\uFE0F ${grupo.setor}`)
       .join("\n\n");
+    const agenda = gruposEscala
+      .map((grupo) =>
+        gruposEscala.length === 1
+          ? grupo.linhas.join("\n\n")
+          : `\uD83D\uDCCD ${grupo.redeLoja}\n\uD83C\uDFF7\uFE0F ${grupo.setor}\n\n${grupo.linhas.join("\n\n")}`,
+      )
+      .join("\n\n");
+    const escalaCompleta = `${cabecalhoEscala}\n\n*Diarista:* ${nome}\n*CPF:* ${
+      diarista?.cpf || ""
+    }\n\n*Di\u00E1rias agendadas:*\n${agenda}`.trim();
     const primeiraDemanda = itens[0]?.demanda || demanda;
     return applyTemplate(templates.escalaDiarista, {
+      EscalaDiarista: escalaCompleta,
       Diarista: nome,
       Telefone: telefoneEfetivoAlocacao(alocacao, diaristas),
       CPF: diarista?.cpf || "",
@@ -2072,7 +2084,8 @@ function DemandaCard({
       Setores: Array.from(new Set(itens.map((item) => demandaSetor(item.demanda)))).join(", ") || demanda.setor || "",
       TotalDiarias: itens.length || 1,
       DiariaTexto: (itens.length || 1) === 1 ? "di\u00E1ria" : "di\u00E1rias",
-      Diarias: diarias,
+      Diarias: cabecalhoEscala,
+      Agenda: agenda,
       FaltaTexto: templates.textoFalta,
     });
   }
