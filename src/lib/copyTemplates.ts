@@ -1,4 +1,5 @@
 import type { Demanda, DemandaAlocacao, Diarista } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
 
 export const COPY_TEMPLATES_KEY = "direct.copy-templates.v6";
 export const COPY_TEMPLATES_EVENT = "direct:copy-templates-changed";
@@ -19,6 +20,8 @@ export const DEFAULT_COPY_TEMPLATES: CopyTemplates = {
     "\u26A0\uFE0F Em caso de falta, avise com anteced\u00EAncia. Faltas sem aviso podem prejudicar as empresas e oportunidades futuras.",
 };
 
+const COPY_TEMPLATES_ROW_ID = "default";
+
 function hasEncodingArtifacts(value: unknown) {
   return (
     typeof value === "string" &&
@@ -26,27 +29,88 @@ function hasEncodingArtifacts(value: unknown) {
   );
 }
 
+function normalizeTemplates(saved: Partial<CopyTemplates> = {}): CopyTemplates {
+  return (Object.keys(DEFAULT_COPY_TEMPLATES) as Array<keyof CopyTemplates>).reduce(
+    (templates, key) => ({
+      ...templates,
+      [key]: hasEncodingArtifacts(saved[key])
+        ? DEFAULT_COPY_TEMPLATES[key]
+        : saved[key] || DEFAULT_COPY_TEMPLATES[key],
+    }),
+    {} as CopyTemplates,
+  );
+}
+
+function writeLocalCopyTemplates(templates: CopyTemplates) {
+  localStorage.setItem(COPY_TEMPLATES_KEY, JSON.stringify(templates));
+  window.dispatchEvent(new CustomEvent(COPY_TEMPLATES_EVENT));
+}
+
+function templatesToRow(templates: CopyTemplates) {
+  return {
+    id: COPY_TEMPLATES_ROW_ID,
+    escala_gerente: templates.escalaGerente,
+    vagas_disponiveis: templates.vagasDisponiveis,
+    escala_diarista: templates.escalaDiarista,
+    texto_falta: templates.textoFalta,
+  };
+}
+
+function rowToTemplates(row: {
+  escala_gerente?: string | null;
+  vagas_disponiveis?: string | null;
+  escala_diarista?: string | null;
+  texto_falta?: string | null;
+}) {
+  return normalizeTemplates({
+    escalaGerente: row.escala_gerente || undefined,
+    vagasDisponiveis: row.vagas_disponiveis || undefined,
+    escalaDiarista: row.escala_diarista || undefined,
+    textoFalta: row.texto_falta || undefined,
+  });
+}
+
+async function saveCopyTemplatesToCloud(templates: CopyTemplates) {
+  try {
+    await supabase
+      .from("copy_templates")
+      .upsert(templatesToRow(templates), { onConflict: "id" });
+  } catch {
+    /* local copy remains available until the next sync */
+  }
+}
+
 export function getCopyTemplates(): CopyTemplates {
   try {
     const raw = localStorage.getItem(COPY_TEMPLATES_KEY);
     const saved = raw ? (JSON.parse(raw) as Partial<CopyTemplates>) : {};
-    return (Object.keys(DEFAULT_COPY_TEMPLATES) as Array<keyof CopyTemplates>).reduce(
-      (templates, key) => ({
-        ...templates,
-        [key]: hasEncodingArtifacts(saved[key])
-          ? DEFAULT_COPY_TEMPLATES[key]
-          : saved[key] || DEFAULT_COPY_TEMPLATES[key],
-      }),
-      {} as CopyTemplates,
-    );
+    return normalizeTemplates(saved);
   } catch {
     return DEFAULT_COPY_TEMPLATES;
   }
 }
 
 export function saveCopyTemplates(templates: CopyTemplates) {
-  localStorage.setItem(COPY_TEMPLATES_KEY, JSON.stringify(templates));
-  window.dispatchEvent(new CustomEvent(COPY_TEMPLATES_EVENT));
+  writeLocalCopyTemplates(templates);
+  void saveCopyTemplatesToCloud(templates);
+}
+
+export async function syncCopyTemplatesFromCloud() {
+  const localTemplates = getCopyTemplates();
+  try {
+    const { data, error } = await supabase
+      .from("copy_templates")
+      .select("*")
+      .eq("id", COPY_TEMPLATES_ROW_ID)
+      .maybeSingle();
+    if (!error && data) {
+      writeLocalCopyTemplates(rowToTemplates(data));
+      return;
+    }
+    await saveCopyTemplatesToCloud(localTemplates);
+  } catch {
+    /* keep local templates */
+  }
 }
 
 export function applyTemplate(text: string, values: Record<string, string | number>) {

@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      copy_templates: {
+        Row: {
+          created_at: string
+          escala_diarista: string
+          escala_gerente: string
+          id: string
+          texto_falta: string
+          updated_at: string
+          vagas_disponiveis: string
+        }
+        Insert: {
+          created_at?: string
+          escala_diarista?: string
+          escala_gerente?: string
+          id?: string
+          texto_falta?: string
+          updated_at?: string
+          vagas_disponiveis?: string
+        }
+        Update: {
+          created_at?: string
+          escala_diarista?: string
+          escala_gerente?: string
+          id?: string
+          texto_falta?: string
+          updated_at?: string
+          vagas_disponiveis?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           created_at: string

@@ -13,6 +13,7 @@ import {
   hasLegacyLocalData,
   migrateLegacyLocalData,
 } from "@/lib/sync";
+import { syncCopyTemplatesFromCloud } from "@/lib/copyTemplates";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -37,6 +38,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session || isLocalAccess) return;
     startSync();
+    void syncCopyTemplatesFromCloud();
     if (hasLegacyLocalData()) {
       migrateLegacyLocalData()
         .then((res) => {
