@@ -838,10 +838,10 @@ export default function DemandasPage() {
 
   function openCopyPanel(type: "gerente" | "vagas") {
     setCopyFilters({
-      rede: redeFilter,
-      loja: lojaFilter,
-      setor: setorFilter,
-      dias: diaFilter ? [diaFilter] : [],
+      rede: "todas",
+      loja: "todas",
+      setor: "todos",
+      dias: [],
       horario: "todos",
     });
     setCopyPanel(type);
@@ -1486,7 +1486,7 @@ export default function DemandasPage() {
                   type="button"
                   variant="outline"
                   className="gap-2 whitespace-nowrap"
-                  disabled={filtered.length === 0}
+                  disabled={demandas.length === 0}
                 >
                   <Copy size={15} />
                   Copiar escala gerente
@@ -1503,7 +1503,7 @@ export default function DemandasPage() {
                   type="button"
                   variant="outline"
                   className="gap-2 whitespace-nowrap"
-                  disabled={!filtered.some((d) => vagasLivresDemanda(d) > 0)}
+                  disabled={!demandas.some((d) => vagasLivresDemanda(d) > 0)}
                 >
                   <Copy size={15} />
                   Copiar vagas disponíveis
