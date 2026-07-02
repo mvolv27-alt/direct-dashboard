@@ -937,6 +937,17 @@ export default function DemandasPage() {
     toast.success(`${removida?.diaristaNome || "Diarista"} removido da demanda ${d.codigo}`);
   }
 
+  function handleAdicionarVaga(d: Demanda) {
+    const vagasAtuais = Math.max(1, d.tarefasTotal || normalizeAlocacoes(d).length || 1);
+    updateDemanda({
+      ...d,
+      tarefasTotal: vagasAtuais + 1,
+      status: demandaStatusFromAlocacoes(normalizeAlocacoes(d), vagasAtuais + 1),
+    });
+    refresh();
+    toast.success(`Mais 1 vaga adicionada na demanda ${d.codigo}`);
+  }
+
   function renderCopyPopoverContent(type: "gerente" | "vagas") {
     const demandasNoTexto =
       type === "vagas" ? copyDemandas.filter((d) => vagasLivresDemanda(d) > 0) : copyDemandas;
@@ -1802,6 +1813,7 @@ export default function DemandasPage() {
                                                         demanda={d}
                                                         diaristas={diaristas}
                                                         onEdit={() => handleEdit(d)}
+                                                        onAddVaga={() => handleAdicionarVaga(d)}
                                                         onDelete={() => handleDelete(d.id)}
                                                         onStatusAlocacao={(alocacaoId, status) =>
                                                           handleStatusAlocacao(d, alocacaoId, status)
@@ -1908,6 +1920,7 @@ function DemandaCard({
   demanda,
   diaristas,
   onEdit,
+  onAddVaga,
   onDelete,
   onStatusAlocacao,
   onReposicao,
@@ -1917,6 +1930,7 @@ function DemandaCard({
   demanda: Demanda;
   diaristas: Diarista[];
   onEdit: () => void;
+  onAddVaga: () => void;
   onDelete: () => void;
   onStatusAlocacao: (alocacaoId: string, status: "presente" | "falta") => void;
   onReposicao: (
@@ -2335,6 +2349,14 @@ function DemandaCard({
             title="Editar diária"
           >
             <Pencil size={14} />
+          </button>
+          <button
+            onClick={onAddVaga}
+            className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+            aria-label="Adicionar vaga"
+            title="Adicionar mais 1 vaga"
+          >
+            <Plus size={14} />
           </button>
           <button
             onClick={onDelete}
