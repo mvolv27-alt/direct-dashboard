@@ -279,6 +279,13 @@ function cpfAlocacao(alocacao: DemandaAlocacao, diaristas: Diarista[]) {
   return diaristas.find((d) => d.id === id)?.cpf || "";
 }
 
+function alocacaoMatchesDiarista(alocacao: DemandaAlocacao, diaristaId: string, diaristaNome: string) {
+  const idEfetivo = alocacao.reposicao?.diaristaId || alocacao.diaristaId;
+  const nomeEfetivo = nomeEfetivoAlocacao(alocacao).trim().toLowerCase();
+  const nomeBusca = diaristaNome.trim().toLowerCase();
+  return diaristaId ? idEfetivo === diaristaId : nomeEfetivo === nomeBusca;
+}
+
 function buildEscalaBody(demandas: Demanda[], diaristas: Diarista[]) {
   const grupos = groupDemandasForCopy(demandas);
   const linhas: string[] = [];
@@ -437,22 +444,20 @@ export default function DemandasPage() {
   }, [demandas]);
 
   const filterOptions = useMemo(() => {
-    const source = demandas.filter((d) => {
-      const redeOk = redeFilter === "todas" || demandaRede(d) === redeFilter;
-      const lojaOk = lojaFilter === "todas" || demandaLoja(d) === lojaFilter;
-      const setorOk = setorFilter === "todos" || demandaSetor(d) === setorFilter;
-      const diaOk = !diaFilter || d.data === diaFilter;
-      return redeOk && lojaOk && setorOk && diaOk;
-    });
     const unique = (values: string[]) =>
       Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const byRede = demandas.filter((d) => redeFilter === "todas" || demandaRede(d) === redeFilter);
+    const byRedeLoja = byRede.filter((d) => lojaFilter === "todas" || demandaLoja(d) === lojaFilter);
+    const byRedeLojaSetor = byRedeLoja.filter(
+      (d) => setorFilter === "todos" || demandaSetor(d) === setorFilter,
+    );
     return {
       redes: unique(demandas.map(demandaRede)),
-      lojas: unique(source.map(demandaLoja)),
-      setores: unique(source.map(demandaSetor)),
-      dias: unique(source.map((d) => d.data)),
+      lojas: unique(byRede.map(demandaLoja)),
+      setores: unique(byRedeLoja.map(demandaSetor)),
+      dias: unique(byRedeLojaSetor.map((d) => d.data)),
     };
-  }, [demandas, redeFilter, lojaFilter, setorFilter, diaFilter]);
+  }, [demandas, redeFilter, lojaFilter, setorFilter]);
 
   const filteredBase = useMemo(() => {
     return demandas
@@ -1811,6 +1816,7 @@ export default function DemandasPage() {
                                                       <DemandaCard
                                                         key={d.id}
                                                         demanda={d}
+                                                        demandas={demandas}
                                                         diaristas={diaristas}
                                                         onEdit={() => handleEdit(d)}
                                                         onAddVaga={() => handleAdicionarVaga(d)}
@@ -1918,6 +1924,7 @@ function TabBtn({
 
 function DemandaCard({
   demanda,
+  demandas,
   diaristas,
   onEdit,
   onAddVaga,
@@ -1928,6 +1935,7 @@ function DemandaCard({
   onRemoverAlocacao,
 }: {
   demanda: Demanda;
+  demandas: Demanda[];
   diaristas: Diarista[];
   onEdit: () => void;
   onAddVaga: () => void;
@@ -2002,22 +2010,68 @@ function DemandaCard({
     setReposicaoSearch("");
   }
 
+  function formatDiaEscalaDiarista(data: string) {
+    if (!data) return "Sem data";
+    const [y, m, d] = data.split("-").map(Number);
+    const date = new Date(y, (m || 1) - 1, d || 1);
+    const weekday = date.toLocaleDateString("pt-BR", { weekday: "long" });
+    const dayMonth = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} \u2014 ${dayMonth}`;
+  }
+
   function buildEscalaAlocacaoText(alocacao: DemandaAlocacao) {
     const templates = getCopyTemplates();
     const diaristaId = alocacao.reposicao?.diaristaId || alocacao.diaristaId;
     const diarista = diaristas.find((d) => d.id === diaristaId);
     const nome = nomeEfetivoAlocacao(alocacao);
-    const diarias = `• ${formatDiaCompleto(demanda.data)}
-  ${horarioDemanda(demanda) || "Sem horário"}
-  ${demanda.rede ? `${demanda.rede} - ` : ""}${demanda.loja}
-  Setor: ${demanda.setor}${alocacao.reposicao ? "\n  Reposição de falta" : ""}`;
+    const itens = demandas
+      .flatMap((d) =>
+        normalizeAlocacoes(d)
+          .filter((a) => alocacaoMatchesDiarista(a, diaristaId, nome))
+          .map((a) => ({ demanda: d, alocacao: a })),
+      )
+      .sort((a, b) =>
+        `${a.demanda.data}${horarioDemanda(a.demanda)}${demandaRede(a.demanda)}${demandaLoja(a.demanda)}${demandaSetor(a.demanda)}`.localeCompare(
+          `${b.demanda.data}${horarioDemanda(b.demanda)}${demandaRede(b.demanda)}${demandaLoja(b.demanda)}${demandaSetor(b.demanda)}`,
+          "pt-BR",
+          { numeric: true },
+        ),
+      );
+
+    const blocos = new Map<string, { redeLoja: string; setor: string; linhas: string[] }>();
+    itens.forEach(({ demanda: itemDemanda, alocacao: itemAlocacao }) => {
+      const redeLoja = [demandaRede(itemDemanda), demandaLoja(itemDemanda)]
+        .filter((value) => value && !/^sem /i.test(value))
+        .join(" ");
+      const setor = demandaSetor(itemDemanda);
+      const key = `${redeLoja}::${setor}`;
+      if (!blocos.has(key)) {
+        blocos.set(key, { redeLoja: redeLoja || demandaLoja(itemDemanda), setor, linhas: [] });
+      }
+      blocos.get(key)!.linhas.push(
+        `\uD83D\uDCC5 ${formatDiaEscalaDiarista(itemDemanda.data)}\n   \uD83D\uDD50 ${horarioDemanda(itemDemanda) || "Sem hor\u00E1rio"}${
+          itemAlocacao.reposicao ? "\n   Reposi\u00E7\u00E3o de falta" : ""
+        }`,
+      );
+    });
+
+    const diarias = Array.from(blocos.values())
+      .map((grupo) => `\uD83D\uDCCD ${grupo.redeLoja}\n\uD83C\uDFF7\uFE0F ${grupo.setor}\n\n${grupo.linhas.join("\n\n")}`)
+      .join("\n\n");
+    const primeiraDemanda = itens[0]?.demanda || demanda;
     return applyTemplate(templates.escalaDiarista, {
       Diarista: nome,
       Telefone: telefoneEfetivoAlocacao(alocacao, diaristas),
       CPF: diarista?.cpf || "",
       Bairro: diarista?.bairro || "",
-      Setores: diarista?.setorExperiencia.join(", ") || demanda.setor || "",
-      TotalDiarias: 1,
+      Rede: demandaRede(primeiraDemanda),
+      Loja: demandaLoja(primeiraDemanda),
+      Setor: demandaSetor(primeiraDemanda),
+      Data: formatDiaEscalaDiarista(primeiraDemanda.data),
+      Horario: horarioDemanda(primeiraDemanda) || "",
+      Setores: Array.from(new Set(itens.map((item) => demandaSetor(item.demanda)))).join(", ") || demanda.setor || "",
+      TotalDiarias: itens.length || 1,
+      DiariaTexto: (itens.length || 1) === 1 ? "di\u00E1ria" : "di\u00E1rias",
       Diarias: diarias,
       FaltaTexto: templates.textoFalta,
     });
