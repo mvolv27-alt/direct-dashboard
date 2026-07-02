@@ -395,7 +395,7 @@ export default function DemandasPage() {
     rede: "todas",
     loja: "todas",
     setor: "todos",
-    dia: "",
+    dias: [] as string[],
     horario: "todos",
   });
   const knownGroupsRef = useRef({ redes: new Set<string>(), lojas: new Set<string>() });
@@ -522,7 +522,7 @@ export default function DemandasPage() {
       .filter((d) => copyFilters.rede === "todas" || demandaRede(d) === copyFilters.rede)
       .filter((d) => copyFilters.loja === "todas" || demandaLoja(d) === copyFilters.loja)
       .filter((d) => copyFilters.setor === "todos" || demandaSetor(d) === copyFilters.setor)
-      .filter((d) => !copyFilters.dia || d.data === copyFilters.dia)
+      .filter((d) => copyFilters.dias.length === 0 || copyFilters.dias.includes(d.data))
       .filter((d) => copyFilters.horario === "todos" || d.horario === copyFilters.horario)
       .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario));
   }, [demandas, copyFilters]);
@@ -534,7 +534,7 @@ export default function DemandasPage() {
       .filter((d) => copyFilters.rede === "todas" || demandaRede(d) === copyFilters.rede)
       .filter((d) => copyFilters.loja === "todas" || demandaLoja(d) === copyFilters.loja)
       .filter((d) => copyFilters.setor === "todos" || demandaSetor(d) === copyFilters.setor)
-      .filter((d) => !copyFilters.dia || d.data === copyFilters.dia);
+      .filter((d) => copyFilters.dias.length === 0 || copyFilters.dias.includes(d.data));
     return {
       redes: unique(demandas.map(demandaRede)),
       lojas: unique(base.map(demandaLoja)),
@@ -834,7 +834,7 @@ export default function DemandasPage() {
       rede: redeFilter,
       loja: lojaFilter,
       setor: setorFilter,
-      dia: diaFilter,
+      dias: diaFilter ? [diaFilter] : [],
       horario: "todos",
     });
     setCopyPanel(type);
@@ -917,27 +917,27 @@ export default function DemandasPage() {
 
     return (
       <PopoverContent
-        className="z-[120] w-[min(92vw,760px)] rounded-2xl p-4"
+        className="z-[120] w-[min(92vw,620px)] rounded-xl p-3"
         align="end"
-        sideOffset={10}
+        sideOffset={4}
       >
-        <div className="grid gap-3">
+        <div className="grid gap-2.5">
           <div>
-            <p className="text-sm font-semibold text-foreground">
+            <p className="text-sm font-semibold leading-tight text-foreground">
               {type === "gerente" ? "Copiar escala para gerente" : "Copiar vagas disponíveis"}
             </p>
-            <p className="text-xs text-muted-foreground">
-              Texto pré-salvo das configurações. Ele atualiza em tempo real com filtros, vagas e diaristas alocados.
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Texto pré-salvo, editável e atualizado pelos filtros.
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-[1fr_1fr_1fr_130px_110px]">
             <Select
               value={copyFilters.rede}
               onValueChange={(rede) =>
                 setCopyFilters((prev) => ({ ...prev, rede, loja: "todas", setor: "todos" }))
               }
             >
-              <SelectTrigger><SelectValue placeholder="Rede" /></SelectTrigger>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Rede" /></SelectTrigger>
               <SelectContent side="bottom" align="start" avoidCollisions={false} className="z-[220]">
                 <SelectItem value="todas">Todas as redes</SelectItem>
                 {copyOptions.redes.map((rede) => (
@@ -949,7 +949,7 @@ export default function DemandasPage() {
               value={copyFilters.loja}
               onValueChange={(loja) => setCopyFilters((prev) => ({ ...prev, loja }))}
             >
-              <SelectTrigger><SelectValue placeholder="Loja" /></SelectTrigger>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Loja" /></SelectTrigger>
               <SelectContent side="bottom" align="start" avoidCollisions={false} className="z-[220]">
                 <SelectItem value="todas">Todas as lojas</SelectItem>
                 {copyOptions.lojas.map((loja) => (
@@ -961,7 +961,7 @@ export default function DemandasPage() {
               value={copyFilters.setor}
               onValueChange={(setor) => setCopyFilters((prev) => ({ ...prev, setor }))}
             >
-              <SelectTrigger><SelectValue placeholder="Setor" /></SelectTrigger>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Setor" /></SelectTrigger>
               <SelectContent side="bottom" align="start" avoidCollisions={false} className="z-[220]">
                 <SelectItem value="todos">Todos os setores</SelectItem>
                 {copyOptions.setores.map((setor) => (
@@ -969,16 +969,51 @@ export default function DemandasPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Input
-              type="date"
-              value={copyFilters.dia}
-              onChange={(e) => setCopyFilters((prev) => ({ ...prev, dia: e.target.value }))}
-            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" className="h-9 justify-start gap-2 px-3">
+                  <CalendarIcon size={14} />
+                  <span className="truncate">
+                    {copyFilters.dias.length === 0
+                      ? "Todos os dias"
+                      : copyFilters.dias.length === 1
+                        ? formatDateBR(copyFilters.dias[0])
+                        : `${copyFilters.dias.length} dias`}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="z-[220] w-auto p-0" align="start" side="bottom" sideOffset={6}>
+                <Calendar
+                  mode="multiple"
+                  selected={copyFilters.dias.map(fromISODate)}
+                  onSelect={(dates) =>
+                    setCopyFilters((prev) => ({
+                      ...prev,
+                      dias: (dates || []).map(toISODate).sort(),
+                    }))
+                  }
+                  initialFocus
+                />
+                {copyFilters.dias.length > 0 && (
+                  <div className="border-t border-border/60 p-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-full"
+                      onClick={() => setCopyFilters((prev) => ({ ...prev, dias: [] }))}
+                    >
+                      Limpar dias
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
             <Select
               value={copyFilters.horario}
               onValueChange={(horario) => setCopyFilters((prev) => ({ ...prev, horario }))}
             >
-              <SelectTrigger><SelectValue placeholder="Horário" /></SelectTrigger>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Horário" /></SelectTrigger>
               <SelectContent side="bottom" align="start" avoidCollisions={false} className="z-[220]">
                 <SelectItem value="todos">Todos os horários</SelectItem>
                 {copyOptions.horarios.map((horario) => (
@@ -987,17 +1022,38 @@ export default function DemandasPage() {
               </SelectContent>
             </Select>
           </div>
+          {copyFilters.dias.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {copyFilters.dias.map((dia) => (
+                <button
+                  key={dia}
+                  type="button"
+                  className="inline-flex h-7 items-center gap-1 rounded-full bg-primary/10 px-2 text-xs font-medium text-primary"
+                  onClick={() =>
+                    setCopyFilters((prev) => ({
+                      ...prev,
+                      dias: prev.dias.filter((d) => d !== dia),
+                    }))
+                  }
+                >
+                  {formatDateBR(dia)}
+                  <X size={12} />
+                </button>
+              ))}
+            </div>
+          )}
           <Textarea
-            className="min-h-72 font-mono text-sm"
+            className="h-56 max-h-56 resize-none overflow-y-auto font-mono text-xs leading-relaxed"
             value={copyDraft}
             onChange={(e) => setCopyDraft(e.target.value)}
             placeholder="O texto pré-salvo aparece aqui e você pode editar antes de copiar..."
           />
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {demandasNoTexto.length} demanda(s) incluída(s) nesse texto. Você pode editar antes de copiar.
             </p>
             <Button
+              size="sm"
               onClick={() =>
                 copyToClipboard(
                   copyDraft,
