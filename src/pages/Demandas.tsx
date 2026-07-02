@@ -225,6 +225,16 @@ function vagasLivresDemanda(d: Demanda) {
   return Math.max(0, totalVagasDemanda(d) - normalizeAlocacoes(d).length);
 }
 
+function cloneAlocacoesForDemanda(alocacoes: DemandaAlocacao[]) {
+  return alocacoes.map((alocacao) => ({
+    ...alocacao,
+    id: uid(),
+    status: "pendente" as const,
+    marcadoEm: undefined,
+    reposicao: undefined,
+  }));
+}
+
 function demandaRede(d: Demanda) {
   return (d.rede || d.cliente || "Sem rede").trim() || "Sem rede";
 }
@@ -237,15 +247,6 @@ function demandaSetor(d: Demanda) {
   return (d.setor || "Sem setor").trim() || "Sem setor";
 }
 
-function formatDiaEscala(data: string) {
-  if (!data) return "Sem data";
-  return fromISODate(data).toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-  });
-}
-
 function groupDemandasForCopy(demandas: Demanda[]) {
   const grupos = new Map<string, Map<string, Map<string, Map<string, Map<string, Demanda[]>>>>>();
   for (const d of demandas) {
@@ -253,7 +254,7 @@ function groupDemandasForCopy(demandas: Demanda[]) {
     const loja = demandaLoja(d);
     const setor = demandaSetor(d);
     const dia = d.data || "Sem data";
-    const horario = d.horario?.trim() || "Sem horário";
+    const horario = horarioDemanda(d) || "Sem horário";
 
     if (!grupos.has(rede)) grupos.set(rede, new Map());
     const lojas = grupos.get(rede)!;
@@ -273,101 +274,94 @@ function sortedKeys<T>(map: Map<string, T>) {
   return Array.from(map.keys()).sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
 }
 
-function demandaLineValues(demandas: Demanda[]) {
-  const first = demandas[0];
-  const vagasLivres = demandas.reduce((sum, d) => sum + vagasLivresDemanda(d), 0);
-  const totalVagas = demandas.reduce((sum, d) => sum + totalVagasDemanda(d), 0);
-  const diaristasLinha = demandas
-    .flatMap((d) => {
-      const alocacoes = normalizeAlocacoes(d);
-      const linhas = alocacoes.map((a) => {
-        const nome = nomeEfetivoAlocacao(a);
-        const status =
-          a.status === "presente" || a.reposicao
-            ? "✅"
-            : a.status === "falta"
-              ? "❌"
-              : "⏳";
-        const reposicao = a.reposicao ? ` (reposição de ${a.diaristaNome})` : "";
-        return `${status} ${nome}${reposicao}`;
-      });
-      const livres = vagasLivresDemanda(d);
-      if (livres > 0) {
-        linhas.push(`• ${livres} ${livres === 1 ? "vaga livre" : "vagas livres"}`);
-      }
-      return linhas;
-    })
-    .join("\n");
-
-  return {
-    Rede: demandaRede(first),
-    Loja: demandaLoja(first),
-    Setor: demandaSetor(first),
-    Dia: formatDiaCompleto(first.data),
-    Data: first.data || "",
-    Horario: horarioDemanda(first) || "Sem horário",
-    Entrada: first.horario || "",
-    Saida: first.horarioSaida || "",
-    Codigo: first.codigo || "",
-    Valor: first.valor
-      ? first.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-      : "",
-    Endereco: first.endereco || "",
-    Diaristas: diaristasLinha || "Sem diarista alocado",
-    VagasLivres: `${vagasLivres} ${vagasLivres === 1 ? "vaga livre" : "vagas livres"}`,
-    TotalVagas: `${totalVagas}`,
-  };
+function cpfAlocacao(alocacao: DemandaAlocacao, diaristas: Diarista[]) {
+  const id = alocacao.reposicao?.diaristaId || alocacao.diaristaId;
+  return diaristas.find((d) => d.id === id)?.cpf || "";
 }
 
-function buildEscalaGerenteText(demandas: Demanda[]) {
-  if (demandas.length === 0) return "";
-  const template = getCopyTemplates().escalaGerente;
+function buildEscalaBody(demandas: Demanda[], diaristas: Diarista[]) {
   const grupos = groupDemandasForCopy(demandas);
-  const blocos: string[] = [];
+  const linhas: string[] = [];
 
   for (const rede of sortedKeys(grupos)) {
     const lojas = grupos.get(rede)!;
     for (const loja of sortedKeys(lojas)) {
+      if (linhas.length > 0) linhas.push("");
+      linhas.push(`*${rede} - ${loja}*`);
       const setores = lojas.get(loja)!;
       for (const setor of sortedKeys(setores)) {
         const dias = setores.get(setor)!;
         for (const dia of sortedKeys(dias)) {
+          linhas.push("");
+          linhas.push(`*${setor} - ${formatDiaCompleto(dia)}*`);
           const horarios = dias.get(dia)!;
           for (const horario of sortedKeys(horarios)) {
-            blocos.push(applyTemplate(template, demandaLineValues(horarios.get(horario)!)));
+            const demandasHorario = horarios.get(horario)!;
+            const primeiro = demandasHorario[0];
+            linhas.push(horarioDemanda(primeiro) || horario);
+
+            const alocacoes = demandasHorario.flatMap(normalizeAlocacoes);
+            if (alocacoes.length === 0) {
+              linhas.push("Sem diarista alocado");
+              continue;
+            }
+
+            alocacoes.forEach((alocacao) => {
+              const nome = nomeEfetivoAlocacao(alocacao);
+              const cpf = cpfAlocacao(alocacao, diaristas);
+              const reposicao = alocacao.reposicao ? ` - reposição de ${alocacao.diaristaNome}` : "";
+              linhas.push(`- ${nome}${cpf ? ` - CPF: ${cpf}` : ""}${reposicao}`);
+            });
           }
         }
       }
     }
   }
 
-  return blocos.join("\n\n").trim();
+  return linhas.join("\n").trim();
+}
+
+function buildVagasBody(demandas: Demanda[]) {
+  const grupos = groupDemandasForCopy(demandas.filter((d) => vagasLivresDemanda(d) > 0));
+  const linhas: string[] = [];
+
+  for (const rede of sortedKeys(grupos)) {
+    const lojas = grupos.get(rede)!;
+    for (const loja of sortedKeys(lojas)) {
+      if (linhas.length > 0) linhas.push("");
+      linhas.push(`*${rede} - ${loja}*`);
+      const setores = lojas.get(loja)!;
+      for (const setor of sortedKeys(setores)) {
+        const dias = setores.get(setor)!;
+        for (const dia of sortedKeys(dias)) {
+          linhas.push("");
+          linhas.push(`*${setor} - ${formatDiaCompleto(dia)}*`);
+          const horarios = dias.get(dia)!;
+          for (const horario of sortedKeys(horarios)) {
+            const demandasHorario = horarios.get(horario)!;
+            const primeiro = demandasHorario[0];
+            const vagas = demandasHorario.reduce((sum, d) => sum + vagasLivresDemanda(d), 0);
+            linhas.push(`${horarioDemanda(primeiro) || horario} - ${vagas} ${vagas === 1 ? "vaga disponível" : "vagas disponíveis"}`);
+          }
+        }
+      }
+    }
+  }
+
+  return linhas.join("\n").trim();
+}
+
+function buildEscalaGerenteText(demandas: Demanda[], diaristas: Diarista[]) {
+  if (demandas.length === 0) return "";
+  const template = getCopyTemplates().escalaGerente;
+  return applyTemplate(template, { Escala: buildEscalaBody(demandas, diaristas) }).trim();
 }
 
 function buildVagasDisponiveisText(demandas: Demanda[]) {
   const disponiveis = demandas.filter((d) => vagasLivresDemanda(d) > 0);
   if (disponiveis.length === 0) return "";
   const template = getCopyTemplates().vagasDisponiveis;
-  const grupos = groupDemandasForCopy(disponiveis);
-  const blocos: string[] = [];
-
-  for (const rede of sortedKeys(grupos)) {
-    const lojas = grupos.get(rede)!;
-    for (const loja of sortedKeys(lojas)) {
-      const setores = lojas.get(loja)!;
-      for (const setor of sortedKeys(setores)) {
-        const dias = setores.get(setor)!;
-        for (const dia of sortedKeys(dias)) {
-          const horarios = dias.get(dia)!;
-          for (const horario of sortedKeys(horarios)) {
-            blocos.push(applyTemplate(template, demandaLineValues(horarios.get(horario)!)));
-          }
-        }
-      }
-    }
-  }
-
-  return blocos.join("\n\n").trim();
+  return applyTemplate(template, { Vagas: buildVagasBody(disponiveis) }).trim();
 }
 
 export default function DemandasPage() {
@@ -514,7 +508,13 @@ export default function DemandasPage() {
   const filtered = useMemo(() => {
     return filteredBase
       .filter((d) => matchesTab(d, tab))
-      .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario));
+      .sort((a, b) =>
+        `${a.data}${horarioDemanda(a)}${demandaSetor(a)}`.localeCompare(
+          `${b.data}${horarioDemanda(b)}${demandaSetor(b)}`,
+          "pt-BR",
+          { numeric: true },
+        ),
+      );
   }, [filteredBase, tab, matchesTab]);
 
   const copyDemandas = useMemo(() => {
@@ -523,8 +523,14 @@ export default function DemandasPage() {
       .filter((d) => copyFilters.loja === "todas" || demandaLoja(d) === copyFilters.loja)
       .filter((d) => copyFilters.setor === "todos" || demandaSetor(d) === copyFilters.setor)
       .filter((d) => copyFilters.dias.length === 0 || copyFilters.dias.includes(d.data))
-      .filter((d) => copyFilters.horario === "todos" || d.horario === copyFilters.horario)
-      .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario));
+      .filter((d) => copyFilters.horario === "todos" || horarioDemanda(d) === copyFilters.horario)
+      .sort((a, b) =>
+        `${a.data}${horarioDemanda(a)}${demandaSetor(a)}`.localeCompare(
+          `${b.data}${horarioDemanda(b)}${demandaSetor(b)}`,
+          "pt-BR",
+          { numeric: true },
+        ),
+      );
   }, [demandas, copyFilters]);
 
   const copyOptions = useMemo(() => {
@@ -540,7 +546,7 @@ export default function DemandasPage() {
       lojas: unique(base.map(demandaLoja)),
       setores: unique(base.map(demandaSetor)),
       dias: unique(base.map((d) => d.data)),
-      horarios: unique(base.map((d) => d.horario)),
+      horarios: unique(base.map(horarioDemanda)),
     };
   }, [demandas, copyFilters]);
 
@@ -548,10 +554,10 @@ export default function DemandasPage() {
     if (!copyPanel) return;
     setCopyDraft(
       copyPanel === "gerente"
-        ? buildEscalaGerenteText(copyDemandas)
+        ? buildEscalaGerenteText(copyDemandas, diaristas)
         : buildVagasDisponiveisText(copyDemandas),
     );
-  }, [copyPanel, copyDemandas]);
+  }, [copyPanel, copyDemandas, diaristas]);
 
   const diaristasFiltrados = useMemo(() => {
     const q = diaristaSearch.toLowerCase().trim();
@@ -659,7 +665,6 @@ export default function DemandasPage() {
     }
     const vagas = Math.max(1, Math.floor(form.vagas || 1));
     const selectedAlocacoes = form.alocacoes.slice(0, vagas);
-    const firstAlocacao = selectedAlocacoes[0];
 
     if (editingId) {
       const existing = demandas.find((d) => d.id === editingId)!;
@@ -685,6 +690,8 @@ export default function DemandasPage() {
       toast.success("Demanda atualizada");
     } else {
       for (const dataISO of form.datas) {
+        const alocacoesDaDemanda = cloneAlocacoesForDemanda(selectedAlocacoes);
+        const primeiraAlocacao = alocacoesDaDemanda[0];
         const nova: Demanda = {
           id: uid(),
           codigo: codigo(),
@@ -695,9 +702,9 @@ export default function DemandasPage() {
           loja: form.loja,
           setor: form.setor,
           valor: form.valor,
-          diaristaId: firstAlocacao?.diaristaId || undefined,
-          diaristaNome: firstAlocacao?.diaristaNome || undefined,
-          alocacoes: selectedAlocacoes,
+          diaristaId: primeiraAlocacao?.diaristaId || undefined,
+          diaristaNome: primeiraAlocacao?.diaristaNome || undefined,
+          alocacoes: alocacoesDaDemanda,
           tarefasTotal: vagas,
           tarefasConcluidas: 0,
           status: "pendente",
@@ -909,6 +916,25 @@ export default function DemandasPage() {
     });
     refresh();
     toast.success(`${diaristaNome} alocado na demanda ${d.codigo}`);
+  }
+
+  function handleRemoverAlocacao(d: Demanda, alocacaoId: string) {
+    const vagas = Math.max(1, d.tarefasTotal || 1);
+    const alocacoesAtuais = normalizeAlocacoes(d);
+    const removida = alocacoesAtuais.find((a) => a.id === alocacaoId);
+    const next = alocacoesAtuais.filter((a) => a.id !== alocacaoId);
+    const primeira = next[0];
+
+    updateDemanda({
+      ...d,
+      diaristaId: primeira?.diaristaId || undefined,
+      diaristaNome: primeira?.diaristaNome || undefined,
+      alocacoes: next,
+      status: demandaStatusFromAlocacoes(next, vagas),
+      tarefasConcluidas: next.filter((a) => a.status === "presente" || a.reposicao).length,
+    });
+    refresh();
+    toast.success(`${removida?.diaristaNome || "Diarista"} removido da demanda ${d.codigo}`);
   }
 
   function renderCopyPopoverContent(type: "gerente" | "vagas") {
@@ -1561,7 +1587,7 @@ export default function DemandasPage() {
       </div>
 
 
-      {/* Lista agrupada por Rede > Loja > Setor > Horários */}
+      {/* Lista agrupada por Rede > Loja > Dia > Horário > Setor */}
       <div className="space-y-4">
         {filtered.length === 0 ? (
           <div className="glass border-soft rounded-2xl hover-lift p-8 text-center text-muted-foreground text-sm">
@@ -1569,15 +1595,22 @@ export default function DemandasPage() {
           </div>
         ) : (
           (() => {
-            const grupos = new Map<string, Map<string, Map<string, Demanda[]>>>();
+            const grupos = new Map<string, Map<string, Map<string, Map<string, Map<string, Demanda[]>>>>>();
             for (const d of filtered) {
-              const rede = (d.rede || d.cliente || "Sem rede").trim() || "Sem rede";
-              const loja = (d.loja || "Sem loja").trim() || "Sem loja";
-              const setor = (d.setor || "Sem setor").trim() || "Sem setor";
+              const rede = demandaRede(d);
+              const loja = demandaLoja(d);
+              const dia = d.data || "Sem data";
+              const horario = horarioDemanda(d) || "Sem horário";
+              const setor = demandaSetor(d);
+
               if (!grupos.has(rede)) grupos.set(rede, new Map());
               const lojas = grupos.get(rede)!;
               if (!lojas.has(loja)) lojas.set(loja, new Map());
-              const setores = lojas.get(loja)!;
+              const dias = lojas.get(loja)!;
+              if (!dias.has(dia)) dias.set(dia, new Map());
+              const horarios = dias.get(dia)!;
+              if (!horarios.has(horario)) horarios.set(horario, new Map());
+              const setores = horarios.get(horario)!;
               if (!setores.has(setor)) setores.set(setor, []);
               setores.get(setor)!.push(d);
             }
@@ -1586,15 +1619,9 @@ export default function DemandasPage() {
             );
             return redesOrdenadas.map((rede) => {
               const lojas = grupos.get(rede)!;
-              const totalRede = Array.from(lojas.values()).reduce(
-                (acc, setores) =>
-                  acc +
-                  Array.from(setores.values()).reduce(
-                    (a, arr) => a + arr.reduce((sum, d) => sum + totalVagasDemanda(d), 0),
-                    0,
-                  ),
-                0,
-              );
+              const totalRede = filtered
+                .filter((d) => demandaRede(d) === rede)
+                .reduce((sum, d) => sum + totalVagasDemanda(d), 0);
               const lojasOrdenadas = Array.from(lojas.keys()).sort((a, b) =>
                 a.localeCompare(b, "pt-BR")
               );
@@ -1645,13 +1672,12 @@ export default function DemandasPage() {
                   {!redeCollapsed && (
                     <div className="p-3 space-y-4">
                       {lojasOrdenadas.map((loja) => {
-                        const setores = lojas.get(loja)!;
-                        const totalLoja = Array.from(setores.values()).reduce(
-                          (a, arr) => a + arr.reduce((sum, d) => sum + totalVagasDemanda(d), 0),
-                          0,
-                        );
-                        const setoresOrdenados = Array.from(setores.keys()).sort(
-                          (a, b) => a.localeCompare(b, "pt-BR")
+                        const dias = lojas.get(loja)!;
+                        const totalLoja = filtered
+                          .filter((d) => demandaRede(d) === rede && demandaLoja(d) === loja)
+                          .reduce((sum, d) => sum + totalVagasDemanda(d), 0);
+                        const diasOrdenados = Array.from(dias.keys()).sort((a, b) =>
+                          a.localeCompare(b, "pt-BR", { numeric: true }),
                         );
                         const lojaKey = `${rede}::${loja}`;
                         const lojaCollapsed = collapsedLojas.has(lojaKey);
@@ -1697,72 +1723,112 @@ export default function DemandasPage() {
                                 </button>
                               </div>
                             </div>
-                            {!lojaCollapsed &&
-                              setoresOrdenados.map((setor) => {
-                                const arr = setores.get(setor)!;
-                                const horarios = new Map<string, Demanda[]>();
-                                for (const demanda of arr) {
-                                  const horario = demanda.horario?.trim() || "Sem horário";
-                                  if (!horarios.has(horario)) horarios.set(horario, []);
-                                  horarios.get(horario)!.push(demanda);
-                                }
-                                const horariosOrdenados = Array.from(horarios.keys()).sort((a, b) =>
-                                  a.localeCompare(b, "pt-BR", { numeric: true })
-                                );
-                                return (
-                                  <div key={setor} className="space-y-2 pl-2">
-                                    <div className="flex items-center gap-2 px-1">
-                                      <span className="text-[10px] uppercase tracking-wide bg-accent text-accent-foreground px-1.5 py-0.5 rounded font-medium">
-                                        {setor}
-                                      </span>
-                                      <span className="text-[10px] text-muted-foreground">
-                                        {arr.reduce((sum, d) => sum + totalVagasDemanda(d), 0)}
-                                      </span>
-                                    </div>
-                                    <div className="space-y-3">
+                            {!lojaCollapsed && (
+                              <div className="space-y-4 pl-2">
+                                {diasOrdenados.map((dia) => {
+                                  const horarios = dias.get(dia)!;
+                                  const horariosOrdenados = Array.from(horarios.keys()).sort((a, b) =>
+                                    a.localeCompare(b, "pt-BR", { numeric: true }),
+                                  );
+                                  const totalDia = Array.from(horarios.values()).reduce(
+                                    (acc, setores) =>
+                                      acc +
+                                      Array.from(setores.values()).reduce(
+                                        (sum, arr) =>
+                                          sum + arr.reduce((total, d) => total + totalVagasDemanda(d), 0),
+                                        0,
+                                      ),
+                                    0,
+                                  );
+
+                                  return (
+                                    <div key={dia} className="space-y-3">
+                                      <div className="flex items-center gap-2 px-1">
+                                        <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                                          {dia === "Sem data" ? dia : formatDiaCompleto(dia)}
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {totalDia} {totalDia === 1 ? "diária" : "diárias"}
+                                        </span>
+                                      </div>
                                       {horariosOrdenados.map((horario) => {
-                                        const demandasDoHorario = horarios.get(horario)!;
+                                        const setores = horarios.get(horario)!;
+                                        const setoresOrdenados = Array.from(setores.keys()).sort((a, b) =>
+                                          a.localeCompare(b, "pt-BR"),
+                                        );
+                                        const totalHorario = Array.from(setores.values()).reduce(
+                                          (sum, arr) =>
+                                            sum + arr.reduce((total, d) => total + totalVagasDemanda(d), 0),
+                                          0,
+                                        );
+
                                         return (
-                                          <div key={horario} className="space-y-2 pl-2">
+                                          <div key={`${dia}-${horario}`} className="space-y-2 pl-2">
                                             <div className="flex items-center gap-2 px-1">
                                               <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground">
                                                 <Clock size={12} />
                                                 {horario}
                                               </span>
                                               <span className="text-[10px] text-muted-foreground">
-                                                {demandasDoHorario.reduce(
-                                                  (sum, d) => sum + totalVagasDemanda(d),
-                                                  0,
-                                                )}
+                                                {totalHorario} {totalHorario === 1 ? "diária" : "diárias"}
                                               </span>
                                             </div>
-                                            <div className="space-y-2">
-                                              {demandasDoHorario.map((d) => (
-                                                <DemandaCard
-                                                  key={d.id}
-                                                  demanda={d}
-                                                  diaristas={diaristas}
-                                                  onEdit={() => handleEdit(d)}
-                                                  onDelete={() => handleDelete(d.id)}
-                                                  onStatusAlocacao={(alocacaoId, status) =>
-                                                    handleStatusAlocacao(d, alocacaoId, status)
-                                                  }
-                                                  onReposicao={(alocacaoId, reposicao) =>
-                                                    handleReposicaoAlocacao(d, alocacaoId, reposicao)
-                                                  }
-                                                  onAlocar={(did, dnome) => {
-                                                    handleAlocarDiarista(d, did, dnome);
-                                                  }}
-                                                />
-                                              ))}
-                                            </div>
+                                            {setoresOrdenados.map((setor) => {
+                                              const demandasDoSetor = setores
+                                                .get(setor)!
+                                                .slice()
+                                                .sort((a, b) =>
+                                                  a.codigo.localeCompare(b.codigo, "pt-BR", { numeric: true }),
+                                                );
+                                              const totalSetor = demandasDoSetor.reduce(
+                                                (sum, d) => sum + totalVagasDemanda(d),
+                                                0,
+                                              );
+
+                                              return (
+                                                <div key={`${dia}-${horario}-${setor}`} className="space-y-2 pl-2">
+                                                  <div className="flex items-center gap-2 px-1">
+                                                    <span className="text-[10px] uppercase tracking-wide bg-accent text-accent-foreground px-1.5 py-0.5 rounded font-medium">
+                                                      {setor}
+                                                    </span>
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                      {totalSetor}
+                                                    </span>
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                    {demandasDoSetor.map((d) => (
+                                                      <DemandaCard
+                                                        key={d.id}
+                                                        demanda={d}
+                                                        diaristas={diaristas}
+                                                        onEdit={() => handleEdit(d)}
+                                                        onDelete={() => handleDelete(d.id)}
+                                                        onStatusAlocacao={(alocacaoId, status) =>
+                                                          handleStatusAlocacao(d, alocacaoId, status)
+                                                        }
+                                                        onReposicao={(alocacaoId, reposicao) =>
+                                                          handleReposicaoAlocacao(d, alocacaoId, reposicao)
+                                                        }
+                                                        onAlocar={(did, dnome) => {
+                                                          handleAlocarDiarista(d, did, dnome);
+                                                        }}
+                                                        onRemoverAlocacao={(alocacaoId) =>
+                                                          handleRemoverAlocacao(d, alocacaoId)
+                                                        }
+                                                      />
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
                                           </div>
                                         );
                                       })}
                                     </div>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -1846,6 +1912,7 @@ function DemandaCard({
   onStatusAlocacao,
   onReposicao,
   onAlocar,
+  onRemoverAlocacao,
 }: {
   demanda: Demanda;
   diaristas: Diarista[];
@@ -1857,6 +1924,7 @@ function DemandaCard({
     reposicao: { diaristaId?: string; diaristaNome: string; telefone?: string; observacoes?: string },
   ) => void;
   onAlocar: (diaristaId: string, diaristaNome: string) => void;
+  onRemoverAlocacao: (alocacaoId: string) => void;
 }) {
   const statusBadge =
     demanda.status === "concluida"
@@ -2130,6 +2198,15 @@ function DemandaCard({
                     </div>
                   </PopoverContent>
                 </Popover>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 rounded-lg border-red-500/50 px-2 text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-500/10"
+                  onClick={() => onRemoverAlocacao(alocacao.id)}
+                  title="Remover diarista desta demanda"
+                >
+                  <Trash2 size={13} />
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"

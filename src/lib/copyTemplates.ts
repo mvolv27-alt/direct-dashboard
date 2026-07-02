@@ -1,6 +1,6 @@
 import type { Demanda, DemandaAlocacao, Diarista } from "@/types";
 
-export const COPY_TEMPLATES_KEY = "direct.copy-templates.v1";
+export const COPY_TEMPLATES_KEY = "direct.copy-templates.v2";
 export const COPY_TEMPLATES_EVENT = "direct:copy-templates-changed";
 
 export type CopyTemplates = {
@@ -11,20 +11,29 @@ export type CopyTemplates = {
 };
 
 export const DEFAULT_COPY_TEMPLATES: CopyTemplates = {
-  escalaGerente:
-    "📋 *ESCALA FECHADA*\n\n*Rede:* [Rede]\n*Loja:* [Loja]\n*Setor:* [Setor]\n*Data:* [Dia]\n*Entrada:* [Entrada]\n*Saída:* [Saida]\n\n*Diaristas:*\n[Diaristas]\n\n*Vagas:* [TotalVagas]",
-  vagasDisponiveis:
-    "🟢 *VAGAS DISPONÍVEIS*\n\n*Rede:* [Rede]\n*Loja:* [Loja]\n*Setor:* [Setor]\n*Data:* [Dia]\n*Horário:* [Horario]\n*Disponível:* [VagasLivres]",
+  escalaGerente: "📋 *ESCALA FECHADA*\n\n[Escala]",
+  vagasDisponiveis: "🟢 *VAGAS DISPONÍVEIS*\n\n[Vagas]",
   escalaDiarista:
-    "✅ *CONFIRMAÇÃO DE ESCALA*\n\n*Diarista:* [Diarista]\n*Telefone:* [Telefone]\n*Bairro:* [Bairro]\n*Setores:* [Setores]\n\n*Diárias alocadas:*\n[Diarias]\n\n[FaltaTexto]",
+    "✅ *CONFIRMAÇÃO DE ESCALA*\n\n*Diarista:* [Diarista]\n*Telefone:* [Telefone]\n*CPF:* [CPF]\n*Bairro:* [Bairro]\n*Setores:* [Setores]\n\n*Diárias alocadas:*\n[Diarias]\n\n[FaltaTexto]",
   textoFalta:
     "⚠️ Em caso de falta, avise com antecedência. Faltas sem aviso podem impactar novas escalações.",
 };
 
+function hasEncodingArtifacts(value: unknown) {
+  return typeof value === "string" && /(Ã[\u0080-\u00bf]|Ã§|Ã£|Ã¡|Ã©|Ã­|Ã³|Ãº|Ã‡|Â|â[^\s]?|ðŸ|�)/.test(value);
+}
+
 export function getCopyTemplates(): CopyTemplates {
   try {
     const raw = localStorage.getItem(COPY_TEMPLATES_KEY);
-    return { ...DEFAULT_COPY_TEMPLATES, ...(raw ? JSON.parse(raw) : {}) };
+    const saved = raw ? (JSON.parse(raw) as Partial<CopyTemplates>) : {};
+    return (Object.keys(DEFAULT_COPY_TEMPLATES) as Array<keyof CopyTemplates>).reduce(
+      (templates, key) => ({
+        ...templates,
+        [key]: hasEncodingArtifacts(saved[key]) ? DEFAULT_COPY_TEMPLATES[key] : saved[key] || DEFAULT_COPY_TEMPLATES[key],
+      }),
+      {} as CopyTemplates,
+    );
   } catch {
     return DEFAULT_COPY_TEMPLATES;
   }
