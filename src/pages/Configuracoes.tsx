@@ -518,6 +518,8 @@ function TextosTab() {
         "[Bairro]",
         "[Rede]",
         "[Loja]",
+        "[RedeLoja]",
+        "[Local]",
         "[Setor]",
         "[Data]",
         "[Horario]",

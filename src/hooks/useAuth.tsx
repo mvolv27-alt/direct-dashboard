@@ -3,8 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 
 const LOCAL_ACCESS_KEY = "direct.local.access";
-const LOCAL_ACCESS_EMAIL = "mvolv27@gmail.com";
-const LOCAL_ACCESS_PASSWORD = "Direct27.";
+const LOCAL_ACCESS_ENABLED =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_LOCAL_ACCESS === "true";
+const LOCAL_ACCESS_EMAIL = import.meta.env.VITE_LOCAL_ACCESS_EMAIL ?? "";
+const LOCAL_ACCESS_PASSWORD = import.meta.env.VITE_LOCAL_ACCESS_PASSWORD ?? "";
 
 type LocalSession = {
   isLocalAccess: true;
@@ -40,7 +42,7 @@ function createLocalSession(): LocalSession {
     isLocalAccess: true,
     user: {
       id: "local-mvolv27",
-      email: LOCAL_ACCESS_EMAIL,
+      email: LOCAL_ACCESS_EMAIL || "local@direct.invalid",
     },
   };
 }
@@ -59,10 +61,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setLoading(false);
     });
-    if (localStorage.getItem(LOCAL_ACCESS_KEY) === "true") {
+    if (LOCAL_ACCESS_ENABLED && localStorage.getItem(LOCAL_ACCESS_KEY) === "true") {
       setSession(createLocalSession());
       setLoading(false);
       return () => sub.subscription.unsubscribe();
+    }
+    if (!LOCAL_ACCESS_ENABLED) {
+      localStorage.removeItem(LOCAL_ACCESS_KEY);
     }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -72,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   function signInLocal(email: string, password: string) {
+    if (!LOCAL_ACCESS_ENABLED || !LOCAL_ACCESS_EMAIL || !LOCAL_ACCESS_PASSWORD) return false;
     const isAllowed =
       email.trim().toLowerCase() === LOCAL_ACCESS_EMAIL &&
       password === LOCAL_ACCESS_PASSWORD;

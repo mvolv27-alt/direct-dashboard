@@ -47,8 +47,9 @@ export default function Auth() {
         if (error) throw error;
         toast.success("Bem-vindo de volta!");
       }
-    } catch (err: any) {
-      toast.error(err.message ?? "Erro ao autenticar");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro ao autenticar";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

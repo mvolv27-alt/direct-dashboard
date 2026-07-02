@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  *  Hybrid Cloud + Offline Sync Layer
  * ------------------------------------------------------------
@@ -22,6 +22,15 @@ export type TableName =
   | "demandas"
   | "registros_financeiros"
   | "setores_custom";
+
+type DbRow = Record<string, unknown>;
+type MapperResult = Diarista | Demanda | RegistroFinanceiro | string;
+type CloudResult = PromiseLike<{ error: unknown }>;
+type RealtimePayload = {
+  eventType: "INSERT" | "UPDATE" | "DELETE";
+  new: DbRow;
+  old: DbRow;
+};
 
 const CACHE_PREFIX = "direct.cache::";
 const OUTBOX_KEY = "direct.outbox::v1";
@@ -66,18 +75,20 @@ function removeFromCache<T extends { id: string }>(key: TableName, id: string) {
 //  Mappers: DB row <-> app type
 // ------------------------------------------------------------
 const num = (v: unknown): number => (typeof v === "number" ? v : Number(v) || 0);
+const text = (v: unknown): string => (typeof v === "string" ? v : "");
+const dateText = (v: unknown): string => text(v) || new Date().toISOString();
 
-function diaristaFromRow(r: any): Diarista {
+function diaristaFromRow(r: DbRow): Diarista {
   return {
-    id: r.id,
-    nome: r.nome ?? "",
-    cpf: r.cpf ?? "",
-    telefone: r.telefone ?? "",
-    bairro: r.bairro ?? "",
+    id: text(r.id),
+    nome: text(r.nome),
+    cpf: text(r.cpf),
+    telefone: text(r.telefone),
+    bairro: text(r.bairro),
     setorExperiencia: Array.isArray(r.setor_experiencia) ? r.setor_experiencia : [],
-    presencas: r.presencas ?? 0,
-    faltas: r.faltas ?? 0,
-    createdAt: r.created_at ?? new Date().toISOString(),
+    presencas: num(r.presencas),
+    faltas: num(r.faltas),
+    createdAt: dateText(r.created_at),
   };
 }
 function diaristaToRow(d: Diarista) {
@@ -93,39 +104,42 @@ function diaristaToRow(d: Diarista) {
   };
 }
 
-function demandaFromRow(r: any): Demanda {
-  let observacoes = r.observacoes ?? "";
+function demandaFromRow(r: DbRow): Demanda {
+  let observacoes = text(r.observacoes);
   let alocacoes: Demanda["alocacoes"] = undefined;
   try {
     const meta = JSON.parse(observacoes);
-    if (meta?.__directMeta === 1) {
-      observacoes = meta.observacoes ?? "";
-      alocacoes = Array.isArray(meta.alocacoes) ? meta.alocacoes : undefined;
+    if (typeof meta === "object" && meta && "__directMeta" in meta) {
+      const typed = meta as { __directMeta?: number; observacoes?: unknown; alocacoes?: unknown };
+      if (typed.__directMeta === 1) {
+        observacoes = text(typed.observacoes);
+        alocacoes = Array.isArray(typed.alocacoes) ? (typed.alocacoes as Demanda["alocacoes"]) : undefined;
+      }
     }
   } catch {
     /* observacoes antigas em texto puro */
   }
 
   return {
-    id: r.id,
-    codigo: r.codigo ?? "",
-    data: r.data ?? "",
-    horario: r.horario ?? "",
-    horarioSaida: r.horario_saida ?? "",
-    rede: r.rede ?? "",
-    loja: r.loja ?? "",
-    setor: r.setor ?? "",
+    id: text(r.id),
+    codigo: text(r.codigo),
+    data: text(r.data),
+    horario: text(r.horario || r.horario_entrada),
+    horarioSaida: text(r.horario_saida),
+    rede: text(r.rede),
+    loja: text(r.loja),
+    setor: text(r.setor),
     valor: num(r.valor),
-    diaristaId: r.diarista_id ?? undefined,
-    diaristaNome: r.diarista_nome ?? "",
-    tarefasTotal: r.tarefas_total ?? 1,
-    tarefasConcluidas: r.tarefas_concluidas ?? 0,
-    status: (r.status ?? "pendente") as Demanda["status"],
-    checkInAt: r.check_in_at ?? undefined,
-    checkInBy: r.check_in_by || undefined,
+    diaristaId: text(r.diarista_id) || undefined,
+    diaristaNome: text(r.diarista_nome),
+    tarefasTotal: num(r.tarefas_total) || 1,
+    tarefasConcluidas: num(r.tarefas_concluidas),
+    status: (text(r.status) || "pendente") as Demanda["status"],
+    checkInAt: text(r.check_in_at) || undefined,
+    checkInBy: text(r.check_in_by) || undefined,
     alocacoes,
     observacoes,
-    createdAt: r.created_at ?? new Date().toISOString(),
+    createdAt: dateText(r.created_at),
   };
 }
 function demandaToRow(d: Demanda) {
@@ -157,24 +171,24 @@ function demandaToRow(d: Demanda) {
   };
 }
 
-function registroFromRow(r: any): RegistroFinanceiro {
+function registroFromRow(r: DbRow): RegistroFinanceiro {
   return {
-    id: r.id,
-    diaristaId: r.diarista_id ?? "",
-    diaristaNome: r.diarista_nome ?? "",
-    loja: r.loja ?? "",
-    data: r.data ?? "",
-    horarioEntrada: r.horario_entrada ?? "",
-    horarioSaida: r.horario_saida ?? "",
-    setor: r.setor ?? "",
+    id: text(r.id),
+    diaristaId: text(r.diarista_id),
+    diaristaNome: text(r.diarista_nome),
+    loja: text(r.loja),
+    data: text(r.data),
+    horarioEntrada: text(r.horario_entrada),
+    horarioSaida: text(r.horario_saida),
+    setor: text(r.setor),
     valorDiaria: num(r.valor_diaria),
     passagem: num(r.passagem),
     adiantamento: num(r.adiantamento),
     custosAdicionais: num(r.custos_adicionais),
     pago: !!r.pago,
-    pagoEm: r.pago_em ?? null,
-    observacoes: r.observacoes ?? "",
-    createdAt: r.created_at ?? new Date().toISOString(),
+    pagoEm: text(r.pago_em) || null,
+    observacoes: text(r.observacoes),
+    createdAt: dateText(r.created_at),
   };
 }
 function registroToRow(r: RegistroFinanceiro) {
@@ -197,12 +211,12 @@ function registroToRow(r: RegistroFinanceiro) {
   };
 }
 
-function setorFromRow(r: any): string {
-  return r.nome;
+function setorFromRow(r: DbRow): string {
+  return text(r.nome);
 }
 
 // Generic mapping registry
-const mappers: Record<TableName, { fromRow: (r: any) => any; toRow: (r: any) => any }> = {
+const mappers: Record<TableName, { fromRow: (r: DbRow) => MapperResult; toRow: (r: unknown) => DbRow }> = {
   diaristas: { fromRow: diaristaFromRow, toRow: diaristaToRow },
   demandas: { fromRow: demandaFromRow, toRow: demandaToRow },
   registros_financeiros: { fromRow: registroFromRow, toRow: registroToRow },
@@ -213,9 +227,13 @@ const mappers: Record<TableName, { fromRow: (r: any) => any; toRow: (r: any) => 
 //  Outbox (offline write queue)
 // ------------------------------------------------------------
 type OutboxOp =
-  | { table: TableName; op: "insert"; payload: any }
-  | { table: TableName; op: "update"; payload: any }
+  | { table: TableName; op: "insert"; payload: DbRow }
+  | { table: TableName; op: "update"; payload: DbRow & { id: string } }
   | { table: TableName; op: "delete"; id: string };
+
+function tableQuery(table: TableName) {
+  return supabase.from(table as never);
+}
 
 function readOutbox(): OutboxOp[] {
   try {
@@ -242,11 +260,11 @@ async function flushOutbox(): Promise<void> {
   for (const op of all) {
     try {
       if (op.op === "insert") {
-        await supabase.from(op.table as any).insert(op.payload);
+        await tableQuery(op.table).insert(op.payload as never);
       } else if (op.op === "update") {
-        await supabase.from(op.table as any).update(op.payload).eq("id", op.payload.id);
+        await tableQuery(op.table).update(op.payload as never).eq("id", op.payload.id);
       } else {
-        await supabase.from(op.table as any).delete().eq("id", op.id);
+        await tableQuery(op.table).delete().eq("id", op.id);
       }
     } catch {
       remaining.push(op);
@@ -267,7 +285,7 @@ export const getCachedSetores = (): string[] => readCache<string>("setores_custo
 // ------------------------------------------------------------
 //  Public write API (optimistic, async, queues if offline)
 // ------------------------------------------------------------
-async function tryCloud(fn: () => Promise<any>, fallback: () => void) {
+async function tryCloud(fn: () => CloudResult, fallback: () => void) {
   if (!navigator.onLine) {
     fallback();
     return;
@@ -284,22 +302,22 @@ async function cloudInsert<T extends { id: string }>(table: TableName, row: T) {
   upsertInCache(table, row);
   const payload = mappers[table].toRow(row);
   await tryCloud(
-    () => supabase.from(table as any).insert(payload) as any,
+    () => tableQuery(table).insert(payload as never) as CloudResult,
     () => enqueue({ table, op: "insert", payload }),
   );
 }
 async function cloudUpdate<T extends { id: string }>(table: TableName, row: T) {
   upsertInCache(table, row);
-  const payload = mappers[table].toRow(row);
+  const payload = mappers[table].toRow(row) as DbRow & { id: string };
   await tryCloud(
-    () => supabase.from(table as any).update(payload).eq("id", row.id) as any,
+    () => tableQuery(table).update(payload as never).eq("id", row.id) as CloudResult,
     () => enqueue({ table, op: "update", payload }),
   );
 }
 async function cloudDelete(table: TableName, id: string) {
   removeFromCache(table, id);
   await tryCloud(
-    () => supabase.from(table as any).delete().eq("id", id) as any,
+    () => tableQuery(table).delete().eq("id", id) as CloudResult,
     () => enqueue({ table, op: "delete", id }),
   );
 }
@@ -327,7 +345,7 @@ export async function upsertSetorCustom(nome: string) {
     writeCache("setores_custom", all);
   }
   await tryCloud(
-    () => supabase.from("setores_custom").insert({ nome }) as any,
+    () => supabase.from("setores_custom").insert({ nome }) as CloudResult,
     () => enqueue({ table: "setores_custom", op: "insert", payload: { nome } }),
   );
 }
@@ -400,9 +418,9 @@ export function useLiveData<T>(getter: () => T, tables: TableName[]): T {
 let started = false;
 
 async function fetchAll(table: TableName) {
-  const { data, error } = await supabase.from(table as any).select("*");
+  const { data, error } = await tableQuery(table).select("*");
   if (error || !data) return;
-  const rows = (data as any[]).map(mappers[table].fromRow);
+  const rows = (data as DbRow[]).map(mappers[table].fromRow);
   writeCache(table, rows);
   emitStatus({ lastSyncedAt: Date.now() });
 }
@@ -411,28 +429,29 @@ function subscribeRealtime(table: TableName) {
   const channel = supabase
     .channel(`direct:${table}`)
     .on(
-      "postgres_changes" as any,
+      "postgres_changes",
       { event: "*", schema: "public", table },
-      (payload: any) => {
+      (payload: RealtimePayload) => {
         const map = mappers[table];
         if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
           const row = map.fromRow(payload.new);
           if (table === "setores_custom") {
+            const setor = String(row || "");
             const all = readCache<string>("setores_custom");
-            if (!all.includes(row)) {
-              all.push(row);
+            if (setor && !all.includes(setor)) {
+              all.push(setor);
               writeCache("setores_custom", all);
             }
           } else {
-            upsertInCache(table, row);
+            upsertInCache(table, row as Diarista | Demanda | RegistroFinanceiro);
           }
         } else if (payload.eventType === "DELETE") {
           if (table === "setores_custom") {
-            const removed = payload.old?.nome;
+            const removed = text(payload.old?.nome);
             const all = readCache<string>("setores_custom").filter((n) => n !== removed);
             writeCache("setores_custom", all);
           } else if (payload.old?.id) {
-            removeFromCache(table, payload.old.id);
+            removeFromCache(table, text(payload.old.id));
           }
         }
         emitStatus({ lastSyncedAt: Date.now() });
