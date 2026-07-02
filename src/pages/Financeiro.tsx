@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type ElementType } from "react";
+﻿import { useState, useEffect, useMemo, type ElementType } from "react";
 import { getDiaristas, getRegistros, saveRegistro, updateRegistro, deleteRegistro, getDemandas } from "@/lib/storage";
 import { useLiveData } from "@/lib/sync";
 import { useRedeValores } from "@/hooks/useConfig";

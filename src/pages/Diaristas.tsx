@@ -1,10 +1,9 @@
-import { useState, useMemo, useEffect } from "react";
+﻿import { useState, useMemo, useEffect } from "react";
 import { getDemandas, getDiaristas, saveDiarista, deleteDiarista, updateDiarista, getSetoresCustom, saveSetorCustom, getRegistros } from "@/lib/storage";
 import { useLiveData } from "@/lib/sync";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { Demanda, Diarista, calcularAvaliacao } from "@/types";
 import {
-  formatDiaCompleto,
   getCopyTemplates,
   horarioDemanda,
   applyTemplate,
@@ -297,7 +296,18 @@ export default function DiaristaPage() {
 
   function buildEscalaDiarista(diarista: Diarista) {
     const templates = getCopyTemplates();
-    const diarias = demandas
+    const formatDiaEscala = (data: string) => {
+      if (!data) return "Sem data";
+      const [y, m, d] = data.split("-").map(Number);
+      const date = new Date(y, (m || 1) - 1, d || 1);
+      const weekday = date.toLocaleDateString("pt-BR", { weekday: "long" });
+      const dayMonth = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+      return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} — ${dayMonth}`;
+    };
+    const demandaRede = (d: Demanda) => (d.rede || d.cliente || "Sem rede").trim() || "Sem rede";
+    const demandaLoja = (d: Demanda) => (d.loja || "Sem loja").trim() || "Sem loja";
+    const demandaSetor = (d: Demanda) => (d.setor || "Sem setor").trim() || "Sem setor";
+    const itens = demandas
       .flatMap((d) =>
         getAlocacoesDemanda(d)
           .filter(
@@ -307,21 +317,74 @@ export default function DiaristaPage() {
               a.diaristaNome.trim().toLowerCase() === diarista.nome.trim().toLowerCase() ||
               a.reposicao?.diaristaNome.trim().toLowerCase() === diarista.nome.trim().toLowerCase(),
           )
-          .map((a) => {
-            const reposicao = a.reposicao?.diaristaId === diarista.id || a.reposicao?.diaristaNome === diarista.nome;
-            return `• ${formatDiaCompleto(d.data)}\n  ${horarioDemanda(d) || "Sem horário"}\n  ${d.rede ? `${d.rede} - ` : ""}${d.loja}\n  Setor: ${d.setor}${reposicao ? "\n  Reposição de falta" : ""}`;
-          }),
+          .map((a) => ({ demanda: d, alocacao: a })),
       )
-      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+      .sort((a, b) =>
+        `${a.demanda.data}${horarioDemanda(a.demanda)}${demandaRede(a.demanda)}${demandaLoja(a.demanda)}${demandaSetor(a.demanda)}`.localeCompare(
+          `${b.demanda.data}${horarioDemanda(b.demanda)}${demandaRede(b.demanda)}${demandaLoja(b.demanda)}${demandaSetor(b.demanda)}`,
+          "pt-BR",
+          { numeric: true },
+        ),
+      );
+    const blocos = new Map<string, { redeLoja: string; setor: string; dias: Map<string, string[]> }>();
+    itens.forEach(({ demanda, alocacao }) => {
+      const redeLoja = [demandaRede(demanda), demandaLoja(demanda)]
+        .filter((value) => value && !/^sem /i.test(value))
+        .join(" ");
+      const setor = demandaSetor(demanda);
+      const key = `${redeLoja}::${setor}`;
+      if (!blocos.has(key)) {
+        blocos.set(key, { redeLoja: redeLoja || demandaLoja(demanda), setor, dias: new Map() });
+      }
+      const grupo = blocos.get(key)!;
+      const horarios = grupo.dias.get(demanda.data) || [];
+      const reposicao =
+        alocacao.reposicao?.diaristaId === diarista.id ||
+        alocacao.reposicao?.diaristaNome === diarista.nome;
+      const horarioLinha = `   🕐 ${horarioDemanda(demanda) || "Sem horário"}${
+        reposicao ? "\n   Reposição de falta" : ""
+      }`;
+      if (!horarios.includes(horarioLinha)) {
+        horarios.push(horarioLinha);
+        grupo.dias.set(demanda.data, horarios);
+      }
+    });
+
+    const gruposEscala = Array.from(blocos.values());
+    const primeiroGrupo = gruposEscala[0];
+    const cabecalhoEscala = gruposEscala
+      .map((grupo) => `📍 ${grupo.redeLoja}\n🏷️ ${grupo.setor}`)
+      .join("\n\n");
+    const agenda = gruposEscala
+      .map((grupo, index) => {
+        const agendaGrupo = Array.from(grupo.dias.entries())
+          .sort(([a], [b]) => a.localeCompare(b, "pt-BR", { numeric: true }))
+          .map(([data, horarios]) => `📅 ${formatDiaEscala(data)}\n${horarios.join("\n")}`)
+          .join("\n\n");
+        return index === 0 ? agendaGrupo : `📍 ${grupo.redeLoja}\n🏷️ ${grupo.setor}\n\n${agendaGrupo}`;
+      })
+      .join("\n\n");
+    const primeiraDemanda = itens[0]?.demanda;
+    const agendaCompleta = agenda ? `*Diárias agendadas:*\n${agenda}` : "Nenhuma diária alocada.";
 
     return applyTemplate(templates.escalaDiarista, {
       Diarista: diarista.nome,
       Telefone: diarista.telefone || "",
       CPF: diarista.cpf || "",
       Bairro: diarista.bairro || "",
+      Rede: primeiraDemanda ? demandaRede(primeiraDemanda) : "",
+      Loja: primeiraDemanda ? demandaLoja(primeiraDemanda) : "",
+      RedeLoja: primeiroGrupo?.redeLoja || "",
+      Local: primeiroGrupo?.redeLoja || "",
+      Setor: primeiroGrupo?.setor || "",
+      Data: primeiraDemanda ? formatDiaEscala(primeiraDemanda.data) : "",
+      Horario: primeiraDemanda ? horarioDemanda(primeiraDemanda) || "" : "",
       Setores: diarista.setorExperiencia.join(", ") || "Sem setor",
-      TotalDiarias: diarias.length,
-      Diarias: diarias.join("\n\n") || "Nenhuma diária alocada.",
+      TotalDiarias: itens.length,
+      DiariaTexto: itens.length === 1 ? "diária" : "diárias",
+      Diarias: cabecalhoEscala,
+      Agenda: agenda,
+      EscalaDiarista: agendaCompleta,
       FaltaTexto: templates.textoFalta,
     });
   }
