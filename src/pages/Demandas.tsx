@@ -1138,7 +1138,14 @@ export default function DemandasPage() {
           }}
         >
           <DialogTrigger asChild>
-            <Button className="w-full justify-center gap-2 sm:w-auto">
+            <Button
+              className="w-full justify-center gap-2 sm:w-auto"
+              onClick={() => {
+                setEditingId(null);
+                setForm(createEmptyForm());
+                setDiaristaSearch("");
+              }}
+            >
               <Plus size={16} />
               Nova Demanda
             </Button>
@@ -1226,7 +1233,6 @@ export default function DemandasPage() {
                     list="demanda-horarios-entrada-salvos"
                     value={form.horario}
                     onChange={(e) => setForm({ ...form, horario: e.target.value })}
-                    placeholder="08:00"
                   />
                   <datalist id="demanda-horarios-entrada-salvos">
                     {savedDemandOptions.horarios.map((horario) => (
@@ -1241,7 +1247,6 @@ export default function DemandasPage() {
                     list="demanda-horarios-saida-salvos"
                     value={form.horarioSaida}
                     onChange={(e) => setForm({ ...form, horarioSaida: e.target.value })}
-                    placeholder="17:00"
                   />
                   <datalist id="demanda-horarios-saida-salvos">
                     {savedDemandOptions.horariosSaida.map((horario) => (
