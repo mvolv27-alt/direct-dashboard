@@ -115,7 +115,7 @@ type FormState = {
 
 const emptyForm: FormState = {
   datas: [new Date().toISOString().slice(0, 10)],
-  horario: "08:00",
+  horario: "",
   horarioSaida: "",
   setor: "",
   valor: 0,
@@ -179,8 +179,8 @@ function createEmptyForm(): FormState {
   return {
     ...emptyForm,
     datas: [new Date().toISOString().slice(0, 10)],
-    horario: prefs.horario || emptyForm.horario,
-    horarioSaida: prefs.horarioSaida || emptyForm.horarioSaida,
+    horario: "",
+    horarioSaida: "",
     rede: prefs.rede || "",
     loja: prefs.loja || "",
     alocacoes: [],
