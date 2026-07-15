@@ -22,6 +22,7 @@ export type Database = {
           id: string
           texto_falta: string
           updated_at: string
+          user_id: string
           vagas_disponiveis: string
         }
         Insert: {
@@ -31,6 +32,7 @@ export type Database = {
           id?: string
           texto_falta?: string
           updated_at?: string
+          user_id?: string
           vagas_disponiveis?: string
         }
         Update: {
@@ -40,6 +42,7 @@ export type Database = {
           id?: string
           texto_falta?: string
           updated_at?: string
+          user_id?: string
           vagas_disponiveis?: string
         }
         Relationships: []
@@ -89,6 +92,7 @@ export type Database = {
           tarefas_concluidas: number
           tarefas_total: number
           updated_at: string
+          user_id: string
           valor: number
         }
         Insert: {
@@ -111,6 +115,7 @@ export type Database = {
           tarefas_concluidas?: number
           tarefas_total?: number
           updated_at?: string
+          user_id?: string
           valor?: number
         }
         Update: {
@@ -133,6 +138,7 @@ export type Database = {
           tarefas_concluidas?: number
           tarefas_total?: number
           updated_at?: string
+          user_id?: string
           valor?: number
         }
         Relationships: []
@@ -149,6 +155,7 @@ export type Database = {
           setor_experiencia: string[]
           telefone: string
           updated_at: string
+          user_id: string
         }
         Insert: {
           bairro?: string
@@ -161,6 +168,7 @@ export type Database = {
           setor_experiencia?: string[]
           telefone?: string
           updated_at?: string
+          user_id?: string
         }
         Update: {
           bairro?: string
@@ -173,6 +181,7 @@ export type Database = {
           setor_experiencia?: string[]
           telefone?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -186,8 +195,10 @@ export type Database = {
           id: string
           nome: string
           rede: string
+          responsavel: string
           uf: string
           updated_at: string
+          user_id: string
         }
         Insert: {
           ativo?: boolean
@@ -198,8 +209,10 @@ export type Database = {
           id?: string
           nome: string
           rede?: string
+          responsavel?: string
           uf?: string
           updated_at?: string
+          user_id?: string
         }
         Update: {
           ativo?: boolean
@@ -210,8 +223,10 @@ export type Database = {
           id?: string
           nome?: string
           rede?: string
+          responsavel?: string
           uf?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -286,6 +301,7 @@ export type Database = {
           id: string
           rede: string
           updated_at: string
+          user_id: string
           valor_recebido: number
         }
         Insert: {
@@ -293,6 +309,7 @@ export type Database = {
           id?: string
           rede: string
           updated_at?: string
+          user_id?: string
           valor_recebido?: number
         }
         Update: {
@@ -300,6 +317,7 @@ export type Database = {
           id?: string
           rede?: string
           updated_at?: string
+          user_id?: string
           valor_recebido?: number
         }
         Relationships: []
@@ -322,6 +340,7 @@ export type Database = {
           passagem: number
           setor: string
           updated_at: string
+          user_id: string
           valor_diaria: number
         }
         Insert: {
@@ -341,6 +360,7 @@ export type Database = {
           passagem?: number
           setor?: string
           updated_at?: string
+          user_id?: string
           valor_diaria?: number
         }
         Update: {
@@ -360,6 +380,7 @@ export type Database = {
           passagem?: number
           setor?: string
           updated_at?: string
+          user_id?: string
           valor_diaria?: number
         }
         Relationships: []
@@ -370,6 +391,7 @@ export type Database = {
           id: string
           setor: string
           updated_at: string
+          user_id: string
           valor_max: number
           valor_min: number
         }
@@ -378,6 +400,7 @@ export type Database = {
           id?: string
           setor: string
           updated_at?: string
+          user_id?: string
           valor_max?: number
           valor_min?: number
         }
@@ -386,6 +409,7 @@ export type Database = {
           id?: string
           setor?: string
           updated_at?: string
+          user_id?: string
           valor_max?: number
           valor_min?: number
         }
@@ -396,16 +420,19 @@ export type Database = {
           created_at: string
           id: string
           nome: string
+          user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           nome: string
+          user_id?: string
         }
         Update: {
           created_at?: string
           id?: string
           nome?: string
+          user_id?: string
         }
         Relationships: []
       }

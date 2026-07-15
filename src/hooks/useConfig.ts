@@ -1,11 +1,19 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  adoptLegacyStorage,
+  getActiveUserId,
+  requireActiveUserId,
+  scopedStorageKey,
+  USER_SCOPE_EVENT,
+} from "@/lib/userScope";
 
 export type Loja = {
   id: string;
   nome: string;
   rede: string;
   endereco: string;
+  responsavel: string;
   bairro: string;
   cidade: string;
   uf: string;
@@ -31,6 +39,7 @@ export const LOJAS_PADRAO: Loja[] = [
     nome: "Frangolandia - Varjota",
     rede: "Frangolandia",
     endereco: "Rua Frei Mansueto, 909",
+    responsavel: "",
     bairro: "Varjota",
     cidade: "Fortaleza",
     uf: "CE",
@@ -41,6 +50,7 @@ export const LOJAS_PADRAO: Loja[] = [
     nome: "Hipermarket - Vila Uniao",
     rede: "Hipermarket",
     endereco: "Rua Livreiro Gualter, 123",
+    responsavel: "",
     bairro: "Vila Uniao",
     cidade: "Fortaleza",
     uf: "CE",
@@ -51,6 +61,7 @@ export const LOJAS_PADRAO: Loja[] = [
     nome: "Hipermarket - Jardim Cearense",
     rede: "Hipermarket",
     endereco: "Rua Rubens Monte, 380",
+    responsavel: "",
     bairro: "Jardim Cearense",
     cidade: "Fortaleza",
     uf: "CE",
@@ -61,6 +72,7 @@ export const LOJAS_PADRAO: Loja[] = [
     nome: "Hipermarket - Serrinha",
     rede: "Hipermarket",
     endereco: "Rua Freire Alemao, 356",
+    responsavel: "",
     bairro: "Serrinha",
     cidade: "Fortaleza",
     uf: "CE",
@@ -71,6 +83,7 @@ export const LOJAS_PADRAO: Loja[] = [
     nome: "Hipermarket - Mondubim",
     rede: "Hipermarket",
     endereco: "Av. Benjamim Brasil, 1099",
+    responsavel: "",
     bairro: "Mondubim",
     cidade: "Fortaleza",
     uf: "CE",
@@ -81,6 +94,7 @@ export const LOJAS_PADRAO: Loja[] = [
     nome: "Hipermarket - Eusebio",
     rede: "Hipermarket",
     endereco: "Rua Embauba, 5",
+    responsavel: "",
     bairro: "Eusebio",
     cidade: "Eusebio",
     uf: "CE",
@@ -137,7 +151,7 @@ function uid() {
 }
 
 function localKey(table: ConfigTable) {
-  return LOCAL_CONFIG_PREFIX + table;
+  return scopedStorageKey(LOCAL_CONFIG_PREFIX + table);
 }
 
 function readLocalRows<T extends { id: string }>(table: ConfigTable): T[] {
@@ -158,9 +172,19 @@ function writeLocalRows<T extends { id: string }>(table: ConfigTable, rows: T[])
   }
 }
 
-function mergeRows<T extends { id: string }>(base: readonly T[], saved: T[]) {
-  const map = new Map(base.map((row) => [row.id, row]));
-  saved.forEach((row) => map.set(row.id, row));
+function rowIdentity(table: ConfigTable, row: { id: string } & Record<string, unknown>) {
+  if (table === "lojas") return `${String(row.rede).toLowerCase()}|${String(row.nome).toLowerCase()}`;
+  if (table === "setor_valores") return String(row.setor).trim().toLowerCase();
+  return String(row.rede).trim().toLowerCase();
+}
+
+function mergeRows<T extends { id: string }>(table: ConfigTable, base: readonly T[], saved: T[]) {
+  const map = new Map(
+    base.map((row) => [rowIdentity(table, row as T & Record<string, unknown>), row]),
+  );
+  saved.forEach((row) =>
+    map.set(rowIdentity(table, row as T & Record<string, unknown>), row),
+  );
   return Array.from(map.values());
 }
 
@@ -188,12 +212,19 @@ function useTable<T extends { id: string }>(table: "lojas" | "setor_valores" | "
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    const userId = getActiveUserId();
+    if (!userId) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+    adoptLegacyStorage([LOCAL_CONFIG_PREFIX + table]);
     const localRows = readLocalRows<T>(table);
-    const { data, error } = await supabase.from(table).select("*");
+    const { data, error } = await supabase.from(table).select("*").eq("user_id", userId);
     if (!error && data && data.length > 0) {
-      setRows(mergeRows(data as unknown as T[], localRows));
+      setRows(mergeRows(table, data as unknown as T[], localRows));
     } else {
-      setRows(mergeRows(FALLBACK_ROWS[table] as unknown as T[], localRows));
+      setRows(mergeRows(table, FALLBACK_ROWS[table] as unknown as T[], localRows));
     }
     setLoading(false);
   }, [table]);
@@ -201,10 +232,15 @@ function useTable<T extends { id: string }>(table: "lojas" | "setor_valores" | "
   useEffect(() => {
     refresh();
     const channel = supabase
-      .channel(`cfg:${table}`)
+      .channel(`cfg:${requireActiveUserId()}:${table}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table },
+        {
+          event: "*",
+          schema: "public",
+          table,
+          filter: `user_id=eq.${requireActiveUserId()}`,
+        },
         () => refresh(),
       )
       .subscribe();
@@ -214,10 +250,12 @@ function useTable<T extends { id: string }>(table: "lojas" | "setor_valores" | "
     };
     window.addEventListener(CONFIG_EVENT, onLocalChange);
     window.addEventListener("storage", onLocalChange);
+    window.addEventListener(USER_SCOPE_EVENT, onLocalChange);
     return () => {
       supabase.removeChannel(channel);
       window.removeEventListener(CONFIG_EVENT, onLocalChange);
       window.removeEventListener("storage", onLocalChange);
+      window.removeEventListener(USER_SCOPE_EVENT, onLocalChange);
     };
   }, [table, refresh]);
 
@@ -229,75 +267,98 @@ export const useSetorValores = () => useTable<SetorValor>("setor_valores");
 export const useRedeValores = () => useTable<RedeValor>("rede_valores");
 
 export async function upsertLoja(l: Partial<Loja> & { id?: string }) {
+  const userId = requireActiveUserId();
+  const isDefaultId = !!l.id && l.id.startsWith("00000000-0000-4000-8000-");
   const row = {
-    id: l.id ?? uid(),
+    id: !l.id || isDefaultId ? uid() : l.id,
     nome: l.nome ?? "",
     rede: l.rede ?? "",
     endereco: l.endereco ?? "",
+    responsavel: l.responsavel ?? "",
     bairro: l.bairro ?? "",
     cidade: l.cidade ?? "Fortaleza",
     uf: l.uf ?? "CE",
     ativo: l.ativo ?? true,
   };
-  upsertLocalRow<Loja>("lojas", row);
-  if (l.id) {
-    const result = await supabase.from("lojas").update(l).eq("id", l.id);
-    return result.error ? { ...result, error: null } : result;
+  const result = await supabase
+    .from("lojas")
+    .upsert({ ...row, user_id: userId }, { onConflict: "id" });
+  if (!result.error) {
+    upsertLocalRow<Loja>(
+      "lojas",
+      row,
+      (item) => item.nome === row.nome && item.rede === row.rede,
+    );
   }
-  const result = await supabase.from("lojas").insert(row);
-  return result.error ? { ...result, error: null } : result;
+  return result;
 }
 export const deleteLoja = async (id: string) => {
-  removeLocalRow<Loja>("lojas", id);
-  const result = await supabase.from("lojas").delete().eq("id", id);
-  return result.error ? { ...result, error: null } : result;
+  const result = await supabase
+    .from("lojas")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", requireActiveUserId());
+  if (!result.error) removeLocalRow<Loja>("lojas", id);
+  return result;
 };
 
 export async function upsertSetorValor(s: { setor: string; valor_min: number; valor_max: number; id?: string }) {
+  const userId = requireActiveUserId();
+  const isDefaultId = !!s.id && s.id.startsWith("00000000-0000-4000-8000-");
   const row = {
-    id: s.id ?? uid(),
+    id: !s.id || isDefaultId ? uid() : s.id,
     setor: s.setor,
     valor_min: s.valor_min,
     valor_max: s.valor_max,
   };
-  upsertLocalRow<SetorValor>(
-    "setor_valores",
-    row,
-    (item) => item.setor.trim().toLowerCase() === s.setor.trim().toLowerCase(),
-  );
-  if (s.id) {
-    const result = await supabase.from("setor_valores").update(s).eq("id", s.id);
-    return result.error ? { ...result, error: null } : result;
+  const result = await supabase
+    .from("setor_valores")
+    .upsert({ ...row, user_id: userId }, { onConflict: "user_id,setor" });
+  if (!result.error) {
+    upsertLocalRow<SetorValor>(
+      "setor_valores",
+      row,
+      (item) => item.setor.trim().toLowerCase() === s.setor.trim().toLowerCase(),
+    );
   }
-  const result = await supabase.from("setor_valores").upsert(row, { onConflict: "setor" });
-  return result.error ? { ...result, error: null } : result;
+  return result;
 }
 export const deleteSetorValor = async (id: string) => {
-  removeLocalRow<SetorValor>("setor_valores", id);
-  const result = await supabase.from("setor_valores").delete().eq("id", id);
-  return result.error ? { ...result, error: null } : result;
+  const result = await supabase
+    .from("setor_valores")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", requireActiveUserId());
+  if (!result.error) removeLocalRow<SetorValor>("setor_valores", id);
+  return result;
 };
 
 export async function upsertRedeValor(r: { rede: string; valor_recebido: number; id?: string }) {
+  const userId = requireActiveUserId();
+  const isDefaultId = !!r.id && r.id.startsWith("00000000-0000-4000-8000-");
   const row = {
-    id: r.id ?? uid(),
+    id: !r.id || isDefaultId ? uid() : r.id,
     rede: r.rede,
     valor_recebido: r.valor_recebido,
   };
-  upsertLocalRow<RedeValor>(
-    "rede_valores",
-    row,
-    (item) => item.rede.trim().toLowerCase() === r.rede.trim().toLowerCase(),
-  );
-  if (r.id) {
-    const result = await supabase.from("rede_valores").update(r).eq("id", r.id);
-    return result.error ? { ...result, error: null } : result;
+  const result = await supabase
+    .from("rede_valores")
+    .upsert({ ...row, user_id: userId }, { onConflict: "user_id,rede" });
+  if (!result.error) {
+    upsertLocalRow<RedeValor>(
+      "rede_valores",
+      row,
+      (item) => item.rede.trim().toLowerCase() === r.rede.trim().toLowerCase(),
+    );
   }
-  const result = await supabase.from("rede_valores").upsert(row, { onConflict: "rede" });
-  return result.error ? { ...result, error: null } : result;
+  return result;
 }
 export const deleteRedeValor = async (id: string) => {
-  removeLocalRow<RedeValor>("rede_valores", id);
-  const result = await supabase.from("rede_valores").delete().eq("id", id);
-  return result.error ? { ...result, error: null } : result;
+  const result = await supabase
+    .from("rede_valores")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", requireActiveUserId());
+  if (!result.error) removeLocalRow<RedeValor>("rede_valores", id);
+  return result;
 };

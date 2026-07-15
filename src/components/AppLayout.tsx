@@ -37,7 +37,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session || isLocalAccess) return;
-    startSync();
+    if (!user?.id) return;
+    void startSync(user.id).catch((error: unknown) => {
+      const description =
+        error instanceof Error ? error.message : "Verifique a conexão com o Supabase.";
+      toast.error("Não foi possível sincronizar os dados", { description });
+    });
     void syncCopyTemplatesFromCloud();
     if (hasLegacyLocalData()) {
       migrateLegacyLocalData()
@@ -53,7 +58,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           /* silent: outbox handles retries */
         });
     }
-  }, [session, isLocalAccess]);
+  }, [session, user?.id, isLocalAccess]);
 
   async function handleLogout() {
     await signOut();
@@ -128,6 +133,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     variant="ghost"
                     size="sm"
                     onClick={handleLogout}
+                    aria-label="Sair da conta"
+                    title="Sair"
                     className={`text-sidebar-foreground hover:bg-sidebar-accent ${compact ? "w-full justify-center px-2" : "w-full justify-start"}`}
                   >
                     <LogOut size={14} />

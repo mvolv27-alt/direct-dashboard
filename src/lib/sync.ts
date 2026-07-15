@@ -16,6 +16,15 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Diarista, RegistroFinanceiro, Demanda } from "@/types";
+import {
+  adoptLegacyStorage,
+  canAdoptLegacyStorage,
+  getActiveUserId,
+  requireActiveUserId,
+  scopedStorageKey,
+  setActiveUserScope,
+  USER_SCOPE_EVENT,
+} from "@/lib/userScope";
 
 export type TableName =
   | "diaristas"
@@ -42,7 +51,7 @@ const STATUS_EVENT = "direct:sync-status";
 // ------------------------------------------------------------
 function readCache<T>(key: TableName): T[] {
   try {
-    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    const raw = localStorage.getItem(scopedStorageKey(CACHE_PREFIX + key));
     return raw ? (JSON.parse(raw) as T[]) : [];
   } catch {
     return [];
@@ -51,7 +60,7 @@ function readCache<T>(key: TableName): T[] {
 
 function writeCache<T>(key: TableName, rows: T[]) {
   try {
-    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(rows));
+    localStorage.setItem(scopedStorageKey(CACHE_PREFIX + key), JSON.stringify(rows));
     window.dispatchEvent(new CustomEvent(DATA_EVENT, { detail: { table: key } }));
   } catch {
     /* ignore quota */
@@ -237,13 +246,13 @@ function tableQuery(table: TableName) {
 
 function readOutbox(): OutboxOp[] {
   try {
-    return JSON.parse(localStorage.getItem(OUTBOX_KEY) || "[]");
+    return JSON.parse(localStorage.getItem(scopedStorageKey(OUTBOX_KEY)) || "[]");
   } catch {
     return [];
   }
 }
 function writeOutbox(ops: OutboxOp[]) {
-  localStorage.setItem(OUTBOX_KEY, JSON.stringify(ops));
+  localStorage.setItem(scopedStorageKey(OUTBOX_KEY), JSON.stringify(ops));
   emitStatus();
 }
 function enqueue(op: OutboxOp) {
@@ -257,12 +266,13 @@ function localCacheHasRows(table: TableName) {
 }
 
 function upsertPayload(table: TableName, payload: DbRow): CloudResult {
+  const ownedPayload = { ...payload, user_id: requireActiveUserId() };
   if (table === "setores_custom") {
     return supabase
       .from("setores_custom")
-      .upsert(payload as never, { onConflict: "nome" }) as CloudResult;
+      .upsert(ownedPayload as never, { onConflict: "user_id,nome" }) as CloudResult;
   }
-  return tableQuery(table).upsert(payload as never, { onConflict: "id" }) as CloudResult;
+  return tableQuery(table).upsert(ownedPayload as never, { onConflict: "id" }) as CloudResult;
 }
 
 async function flushOutbox(): Promise<void> {
@@ -276,9 +286,17 @@ async function flushOutbox(): Promise<void> {
         const { error } = await upsertPayload(op.table, op.payload);
         if (error) throw error;
       } else if (op.op === "update") {
-        await tableQuery(op.table).update(op.payload as never).eq("id", op.payload.id);
+        const { error } = await tableQuery(op.table)
+          .update({ ...op.payload, user_id: requireActiveUserId() } as never)
+          .eq("id", op.payload.id)
+          .eq("user_id", requireActiveUserId());
+        if (error) throw error;
       } else {
-        await tableQuery(op.table).delete().eq("id", op.id);
+        const { error } = await tableQuery(op.table)
+          .delete()
+          .eq("id", op.id)
+          .eq("user_id", requireActiveUserId());
+        if (error) throw error;
       }
     } catch {
       remaining.push(op);
@@ -322,16 +340,28 @@ async function cloudInsert<T extends { id: string }>(table: TableName, row: T) {
 }
 async function cloudUpdate<T extends { id: string }>(table: TableName, row: T) {
   upsertInCache(table, row);
-  const payload = mappers[table].toRow(row) as DbRow & { id: string };
+  const payload = {
+    ...mappers[table].toRow(row),
+    id: row.id,
+    user_id: requireActiveUserId(),
+  } as DbRow & { id: string };
   await tryCloud(
-    () => tableQuery(table).update(payload as never).eq("id", row.id) as CloudResult,
+    () =>
+      tableQuery(table)
+        .update(payload as never)
+        .eq("id", row.id)
+        .eq("user_id", requireActiveUserId()) as CloudResult,
     () => enqueue({ table, op: "update", payload }),
   );
 }
 async function cloudDelete(table: TableName, id: string) {
   removeFromCache(table, id);
   await tryCloud(
-    () => tableQuery(table).delete().eq("id", id) as CloudResult,
+    () =>
+      tableQuery(table)
+        .delete()
+        .eq("id", id)
+        .eq("user_id", requireActiveUserId()) as CloudResult,
     () => enqueue({ table, op: "delete", id }),
   );
 }
@@ -362,8 +392,16 @@ export async function upsertSetorCustom(nome: string) {
     () =>
       supabase
         .from("setores_custom")
-        .upsert({ nome }, { onConflict: "nome" }) as CloudResult,
-    () => enqueue({ table: "setores_custom", op: "insert", payload: { nome } }),
+        .upsert(
+          { nome, user_id: requireActiveUserId() } as never,
+          { onConflict: "user_id,nome" },
+        ) as CloudResult,
+    () =>
+      enqueue({
+        table: "setores_custom",
+        op: "insert",
+        payload: { nome, user_id: requireActiveUserId() },
+      }),
   );
 }
 
@@ -420,9 +458,11 @@ export function useLiveData<T>(getter: () => T, tables: TableName[]): T {
     };
     window.addEventListener(DATA_EVENT, refresh);
     window.addEventListener("storage", refresh);
+    window.addEventListener(USER_SCOPE_EVENT, refresh);
     return () => {
       window.removeEventListener(DATA_EVENT, refresh);
       window.removeEventListener("storage", refresh);
+      window.removeEventListener(USER_SCOPE_EVENT, refresh);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tables.join(",")]);
@@ -432,11 +472,14 @@ export function useLiveData<T>(getter: () => T, tables: TableName[]): T {
 // ------------------------------------------------------------
 //  Realtime + initial fetch (called once from AppLayout)
 // ------------------------------------------------------------
-let started = false;
+let startedUserId = "";
+let realtimeChannels: ReturnType<typeof subscribeRealtime>[] = [];
 
 async function fetchAll(table: TableName) {
-  const { data, error } = await tableQuery(table).select("*");
-  if (error || !data) return;
+  const userId = requireActiveUserId();
+  const { data, error } = await tableQuery(table).select("*").eq("user_id", userId);
+  if (error) throw error;
+  if (!data) return;
   const rows = (data as DbRow[]).map(mappers[table].fromRow);
   if (rows.length === 0 && localCacheHasRows(table)) {
     emitStatus({ lastSyncedAt: Date.now() });
@@ -464,11 +507,12 @@ async function uploadCurrentCacheToCloud(tables: TableName[]) {
 }
 
 function subscribeRealtime(table: TableName) {
+  const userId = requireActiveUserId();
   const channel = supabase
-    .channel(`direct:${table}`)
+    .channel(`direct:${userId}:${table}`)
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table },
+      { event: "*", schema: "public", table, filter: `user_id=eq.${userId}` },
       (payload: RealtimePayload) => {
         const map = mappers[table];
         if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
@@ -499,15 +543,27 @@ function subscribeRealtime(table: TableName) {
   return channel;
 }
 
-export async function startSync() {
-  if (started) return;
-  started = true;
+export async function startSync(userId: string) {
+  if (!userId || startedUserId === userId) return;
+  realtimeChannels.forEach((channel) => void supabase.removeChannel(channel));
+  realtimeChannels = [];
+  startedUserId = userId;
+  setActiveUserScope(userId);
   const tables: TableName[] = [
     "diaristas",
     "demandas",
     "registros_financeiros",
     "setores_custom",
   ];
+
+  adoptLegacyStorage([
+    ...tables.map((table) => CACHE_PREFIX + table),
+    OUTBOX_KEY,
+    MIGRATED_FLAG,
+  ]);
+  if (localStorage.getItem(scopedStorageKey(MIGRATED_FLAG))) {
+    Object.values(LEGACY).forEach((key) => localStorage.removeItem(key));
+  }
 
   window.addEventListener("online", () => {
     emitStatus();
@@ -519,12 +575,19 @@ export async function startSync() {
   await uploadCurrentCacheToCloud(tables);
   await flushOutbox();
   // Then hydrate from cloud with the latest shared data.
-  await Promise.all(tables.map(fetchAll));
+  const fetchResults = await Promise.allSettled(tables.map(fetchAll));
   // Retry anything that could not be sent on the first pass.
   await flushOutbox();
   // realtime subscriptions
-  tables.forEach(subscribeRealtime);
+  realtimeChannels = tables.map(subscribeRealtime);
   emitStatus({ lastSyncedAt: Date.now() });
+  const failedFetches = fetchResults.filter(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (failedFetches.length > 0 && navigator.onLine) {
+    startedUserId = "";
+    throw new Error("O banco ainda não está preparado para separar os dados por supervisor.");
+  }
 }
 
 // ------------------------------------------------------------
@@ -545,7 +608,8 @@ export async function migrateLegacyLocalData(): Promise<{
   setores: number;
 }> {
   const result = { diaristas: 0, demandas: 0, registros: 0, setores: 0 };
-  if (localStorage.getItem(MIGRATED_FLAG)) return result;
+  if (!canAdoptLegacyStorage()) return result;
+  if (localStorage.getItem(scopedStorageKey(MIGRATED_FLAG))) return result;
 
   const legacyDiaristas = JSON.parse(localStorage.getItem(LEGACY.diaristas) || "[]");
   for (const d of legacyDiaristas) {
@@ -579,12 +643,17 @@ export async function migrateLegacyLocalData(): Promise<{
     result.setores++;
   }
 
-  localStorage.setItem(MIGRATED_FLAG, new Date().toISOString());
+  localStorage.setItem(scopedStorageKey(MIGRATED_FLAG), new Date().toISOString());
+  Object.values(LEGACY).forEach((key) => localStorage.removeItem(key));
   return result;
 }
 
 export function hasLegacyLocalData(): boolean {
-  if (localStorage.getItem(MIGRATED_FLAG)) return false;
+  if (
+    !getActiveUserId() ||
+    !canAdoptLegacyStorage() ||
+    localStorage.getItem(scopedStorageKey(MIGRATED_FLAG))
+  ) return false;
   return [LEGACY.diaristas, LEGACY.financeiro, LEGACY.setores, LEGACY.demandas].some(
     (k) => {
       try {

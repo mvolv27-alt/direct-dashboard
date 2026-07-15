@@ -61,6 +61,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { adoptLegacyStorage, scopedStorageKey } from "@/lib/userScope";
+import { useLojas, type Loja } from "@/hooks/useConfig";
 
 const SETORES_PADRAO = [
   "Açougueiro",
@@ -138,7 +140,10 @@ const DEMANDA_PREFS_KEY = "direct.demanda.prefs.v1";
 
 function readDemandaPrefs() {
   try {
-    return JSON.parse(localStorage.getItem(DEMANDA_PREFS_KEY) || "{}") as {
+    adoptLegacyStorage([DEMANDA_PREFS_KEY]);
+    return JSON.parse(
+      localStorage.getItem(scopedStorageKey(DEMANDA_PREFS_KEY)) || "{}",
+    ) as {
       rede?: string;
       loja?: string;
       horario?: string;
@@ -160,7 +165,7 @@ function rememberDemandaPrefs(rede: string, loja: string, horario: string, horar
   const horarios = Array.from(new Set([...(prefs.horarios || []), horario].filter(Boolean)));
   const horariosSaida = Array.from(new Set([...(prefs.horariosSaida || []), horarioSaida].filter(Boolean)));
   localStorage.setItem(
-    DEMANDA_PREFS_KEY,
+    scopedStorageKey(DEMANDA_PREFS_KEY),
     JSON.stringify({
       rede,
       loja,
@@ -371,10 +376,50 @@ function buildVagasDisponiveisText(demandas: Demanda[]) {
   return applyTemplate(template, { Vagas: buildVagasBody(disponiveis) }).trim();
 }
 
+function normalizeLojaLookup(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function findLojaCadastro(demanda: Demanda, lojas: Loja[]) {
+  const rede = normalizeLojaLookup(demandaRede(demanda));
+  const loja = normalizeLojaLookup(demandaLoja(demanda));
+  return lojas.find((item) => {
+    const itemRede = normalizeLojaLookup(item.rede);
+    const itemNome = normalizeLojaLookup(item.nome);
+    const itemBairro = normalizeLojaLookup(item.bairro);
+    const mesmaRede = !rede || !itemRede || itemRede === rede;
+    const mesmaLoja =
+      itemNome === loja ||
+      itemBairro === loja ||
+      (loja.length > 2 && itemNome.includes(loja)) ||
+      (itemNome.length > 2 && loja.includes(itemNome));
+    return mesmaRede && mesmaLoja;
+  });
+}
+
+function enderecoCompletoLoja(loja?: Loja) {
+  if (!loja) return "Não informado";
+  return [loja.endereco, loja.bairro, loja.cidade && `${loja.cidade}/${loja.uf}`]
+    .filter(Boolean)
+    .join(" - ") || "Não informado";
+}
+
+function nomeRedeLoja(demanda: Demanda, loja?: Loja) {
+  const rede = demandaRede(demanda);
+  const nome = loja?.nome || demandaLoja(demanda);
+  if (normalizeLojaLookup(nome).includes(normalizeLojaLookup(rede))) return nome;
+  return [rede, nome].filter((value) => value && !/^sem /i.test(value)).join(" ");
+}
+
 export default function DemandasPage() {
   const demandas = useLiveData(getDemandas, ["demandas"]);
   const diaristas = useLiveData(getDiaristas, ["diaristas"]);
   const setoresExtra = useLiveData(getSetoresCustom, ["setores_custom"]);
+  const { rows: lojasCadastradas } = useLojas();
   const setores = Array.from(new Set([...SETORES_PADRAO, ...setoresExtra]));
 
   const [search, setSearch] = useState("");
@@ -1837,6 +1882,7 @@ export default function DemandasPage() {
                                                         demanda={d}
                                                         demandas={demandas}
                                                         diaristas={diaristas}
+                                                        lojas={lojasCadastradas}
                                                         onEdit={() => handleEdit(d)}
                                                         onAddVaga={() => handleAdicionarVaga(d)}
                                                         onDelete={() => handleDelete(d.id)}
@@ -1945,6 +1991,7 @@ function DemandaCard({
   demanda,
   demandas,
   diaristas,
+  lojas,
   onEdit,
   onAddVaga,
   onDelete,
@@ -1956,6 +2003,7 @@ function DemandaCard({
   demanda: Demanda;
   demandas: Demanda[];
   diaristas: Diarista[];
+  lojas: Loja[];
   onEdit: () => void;
   onAddVaga: () => void;
   onDelete: () => void;
@@ -2057,15 +2105,29 @@ function DemandaCard({
         ),
       );
 
-    const blocos = new Map<string, { redeLoja: string; setor: string; dias: Map<string, string[]> }>();
+    const blocos = new Map<
+      string,
+      {
+        redeLoja: string;
+        setor: string;
+        endereco: string;
+        responsavel: string;
+        dias: Map<string, string[]>;
+      }
+    >();
     itens.forEach(({ demanda: itemDemanda, alocacao: itemAlocacao }) => {
-      const redeLoja = [demandaRede(itemDemanda), demandaLoja(itemDemanda)]
-        .filter((value) => value && !/^sem /i.test(value))
-        .join(" ");
+      const lojaCadastro = findLojaCadastro(itemDemanda, lojas);
+      const redeLoja = nomeRedeLoja(itemDemanda, lojaCadastro);
       const setor = demandaSetor(itemDemanda);
       const key = `${redeLoja}::${setor}`;
       if (!blocos.has(key)) {
-        blocos.set(key, { redeLoja: redeLoja || demandaLoja(itemDemanda), setor, dias: new Map() });
+        blocos.set(key, {
+          redeLoja: redeLoja || demandaLoja(itemDemanda),
+          setor,
+          endereco: enderecoCompletoLoja(lojaCadastro),
+          responsavel: lojaCadastro?.responsavel || "Não informado",
+          dias: new Map(),
+        });
       }
       const grupo = blocos.get(key)!;
       const horarios = grupo.dias.get(itemDemanda.data) || [];
@@ -2079,8 +2141,16 @@ function DemandaCard({
     });
 
     const gruposEscala = Array.from(blocos.values());
+    const contatoGrupo = (grupo: (typeof gruposEscala)[number], incluirLoja = true) =>
+      [
+        incluirLoja ? `\uD83D\uDCCD ${grupo.redeLoja}` : "",
+        `\uD83C\uDFE0 *Endereço:* ${grupo.endereco}`,
+        `\uD83D\uDC64 *Ao chegar, procurar por:* ${grupo.responsavel}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
     const cabecalhoEscala = gruposEscala
-      .map((grupo) => `\uD83D\uDCCD ${grupo.redeLoja}\n\uD83C\uDFF7\uFE0F ${grupo.setor}`)
+      .map((grupo) => `${contatoGrupo(grupo)}\n\uD83C\uDFF7\uFE0F ${grupo.setor}`)
       .join("\n\n");
     const agenda = gruposEscala
       .map((grupo, index) => {
@@ -2093,14 +2163,32 @@ function DemandaCard({
           .join("\n\n");
         return index === 0
           ? agendaGrupo
-          : `\uD83D\uDCCD ${grupo.redeLoja}\n\uD83C\uDFF7\uFE0F ${grupo.setor}\n\n${agendaGrupo}`;
+          : `${contatoGrupo(grupo)}\n\uD83C\uDFF7\uFE0F ${grupo.setor}\n\n${agendaGrupo}`;
       })
       .join("\n\n");
     const primeiraDemanda = itens[0]?.demanda || demanda;
-    const redeLojaPrincipal = [demandaRede(primeiraDemanda), demandaLoja(primeiraDemanda)]
-      .filter((value) => value && !/^sem /i.test(value))
-      .join(" ");
-    const agendaCompleta = `*Di\u00E1rias agendadas:*\n${agenda}`.trim();
+    const primeiraLoja = findLojaCadastro(primeiraDemanda, lojas);
+    const redeLojaPrincipal = nomeRedeLoja(primeiraDemanda, primeiraLoja);
+    const primeiroGrupo = gruposEscala[0];
+    const templateEscala = templates.escalaDiarista;
+    const usaBlocoContato = templateEscala.includes("[LojaContato]");
+    const linhasContatoAdicional = primeiroGrupo && !usaBlocoContato
+      ? [
+          !/\[(?:Loja|RedeLoja|Local)\]/.test(templateEscala)
+            ? `\uD83D\uDCCD ${primeiroGrupo.redeLoja}`
+            : "",
+          !templateEscala.includes("[Endereco]")
+            ? `\uD83C\uDFE0 *Endereço:* ${primeiroGrupo.endereco}`
+            : "",
+          !templateEscala.includes("[Responsavel]")
+            ? `\uD83D\uDC64 *Ao chegar, procurar por:* ${primeiroGrupo.responsavel}`
+            : "",
+        ].filter(Boolean)
+      : [];
+    const contatoAdicional = linhasContatoAdicional.length
+      ? `${linhasContatoAdicional.join("\n")}\n\n`
+      : "";
+    const agendaCompleta = `${contatoAdicional}*Di\u00E1rias agendadas:*\n${agenda}`.trim();
     return applyTemplate(templates.escalaDiarista, {
       EscalaDiarista: agendaCompleta,
       Diarista: nome,
@@ -2108,9 +2196,12 @@ function DemandaCard({
       CPF: diarista?.cpf || "",
       Bairro: diarista?.bairro || "",
       Rede: demandaRede(primeiraDemanda),
-      Loja: demandaLoja(primeiraDemanda),
+      Loja: primeiraLoja?.nome || demandaLoja(primeiraDemanda),
       RedeLoja: redeLojaPrincipal || demandaLoja(primeiraDemanda),
       Local: redeLojaPrincipal || demandaLoja(primeiraDemanda),
+      Endereco: enderecoCompletoLoja(primeiraLoja),
+      Responsavel: primeiraLoja?.responsavel || "Não informado",
+      LojaContato: primeiroGrupo ? contatoGrupo(primeiroGrupo) : "",
       Setor: demandaSetor(primeiraDemanda),
       Data: formatDiaEscalaDiarista(primeiraDemanda.data),
       Horario: horarioDemanda(primeiraDemanda) || "",

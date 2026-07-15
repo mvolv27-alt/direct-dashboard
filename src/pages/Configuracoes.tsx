@@ -48,6 +48,7 @@ import {
   Copy,
   X,
   FileText,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -111,6 +112,7 @@ function LojasTab() {
     nome: "",
     rede: "",
     endereco: "",
+    responsavel: "",
     bairro: "",
     cidade: "Fortaleza",
     uf: "CE",
@@ -118,7 +120,15 @@ function LojasTab() {
 
   function openNew() {
     setEditing(null);
-    setForm({ nome: "", rede: "", endereco: "", bairro: "", cidade: "Fortaleza", uf: "CE" });
+    setForm({
+      nome: "",
+      rede: "",
+      endereco: "",
+      responsavel: "",
+      bairro: "",
+      cidade: "Fortaleza",
+      uf: "CE",
+    });
     setOpen(true);
   }
 
@@ -128,6 +138,7 @@ function LojasTab() {
       nome: l.nome,
       rede: l.rede,
       endereco: l.endereco,
+      responsavel: l.responsavel || "",
       bairro: l.bairro,
       cidade: l.cidade,
       uf: l.uf,
@@ -143,7 +154,9 @@ function LojasTab() {
     const payload = { ...form, ...(editing ? { id: editing.id } : {}) };
     const { error } = await upsertLoja(payload);
     if (error) {
-      toast.error("Erro ao salvar loja");
+      toast.error("Não foi possível salvar a loja na nuvem", {
+        description: "Verifique a conexão e execute as migrações do Supabase antes de tentar novamente.",
+      });
       return;
     }
     toast.success(editing ? "Loja atualizada" : "Loja cadastrada");
@@ -154,7 +167,7 @@ function LojasTab() {
     if (!confirm(`Excluir "${l.nome}"?`)) return;
     const { error } = await deleteLoja(l.id);
     if (error) {
-      toast.error("Erro ao excluir");
+      toast.error("Não foi possível excluir a loja na nuvem");
       return;
     }
     toast.success("Loja excluída");
@@ -164,7 +177,13 @@ function LojasTab() {
     const endereco = [l.endereco, l.bairro, l.cidade && `${l.cidade}/${l.uf}`]
       .filter(Boolean)
       .join(" - ");
-    const texto = [l.nome, endereco].filter(Boolean).join("\n");
+    const texto = [
+      l.nome,
+      endereco,
+      l.responsavel && `Responsável: ${l.responsavel}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     try {
       if (navigator.clipboard?.writeText) {
@@ -180,7 +199,7 @@ function LojasTab() {
         document.execCommand("copy");
         document.body.removeChild(area);
       }
-      toast.success("Loja e endereço copiados");
+      toast.success("Dados da loja copiados");
     } catch {
       toast.error("Não foi possível copiar");
     }
@@ -207,14 +226,15 @@ function LojasTab() {
               <Plus size={14} /> Nova loja
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md rounded-2xl">
+          <DialogContent className="max-h-[85dvh] max-w-md overflow-y-auto rounded-2xl">
             <DialogHeader>
               <DialogTitle>{editing ? "Editar loja" : "Nova loja"}</DialogTitle>
             </DialogHeader>
             <div className="grid gap-3 py-2 text-sm">
               <div className="grid gap-1.5">
-                <Label>Nome *</Label>
+                <Label htmlFor="loja-nome">Nome *</Label>
                 <Input
+                  id="loja-nome"
                   value={form.nome}
                   onChange={(e) => setForm({ ...form, nome: e.target.value })}
                   placeholder="Ex: Hipermarket - Vila União"
@@ -222,40 +242,54 @@ function LojasTab() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1.5">
-                  <Label>Rede</Label>
+                  <Label htmlFor="loja-rede">Rede</Label>
                   <Input
+                    id="loja-rede"
                     value={form.rede}
                     onChange={(e) => setForm({ ...form, rede: e.target.value })}
                     placeholder="Ex: Hipermarket"
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label>Bairro</Label>
+                  <Label htmlFor="loja-bairro">Bairro</Label>
                   <Input
+                    id="loja-bairro"
                     value={form.bairro}
                     onChange={(e) => setForm({ ...form, bairro: e.target.value })}
                   />
                 </div>
               </div>
               <div className="grid gap-1.5">
-                <Label>Endereço</Label>
+                <Label htmlFor="loja-endereco">Endereço</Label>
                 <Input
+                  id="loja-endereco"
                   value={form.endereco}
                   onChange={(e) => setForm({ ...form, endereco: e.target.value })}
                   placeholder="Rua, número"
                 />
               </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="loja-responsavel">Responsável</Label>
+                <Input
+                  id="loja-responsavel"
+                  value={form.responsavel}
+                  onChange={(e) => setForm({ ...form, responsavel: e.target.value })}
+                  placeholder="Nome do responsável pela loja"
+                />
+              </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="grid gap-1.5 col-span-2">
-                  <Label>Cidade</Label>
+                  <Label htmlFor="loja-cidade">Cidade</Label>
                   <Input
+                    id="loja-cidade"
                     value={form.cidade}
                     onChange={(e) => setForm({ ...form, cidade: e.target.value })}
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label>UF</Label>
+                  <Label htmlFor="loja-uf">UF</Label>
                   <Input
+                    id="loja-uf"
                     maxLength={2}
                     value={form.uf}
                     onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase() })}
@@ -302,6 +336,12 @@ function LojasTab() {
                           .filter(Boolean)
                           .join(" - ")}
                       </p>
+                      {l.responsavel && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                          <UserRound size={11} className="shrink-0" />
+                          {l.responsavel}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <Button
@@ -309,12 +349,19 @@ function LojasTab() {
                         variant="ghost"
                         className="h-7 w-7"
                         onClick={() => handleCopyLoja(l)}
-                        title="Copiar loja e endereço"
-                        aria-label="Copiar loja e endereço"
+                        title="Copiar dados da loja"
+                        aria-label="Copiar dados da loja"
                       >
                         <Copy size={13} />
                       </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(l)}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => openEdit(l)}
+                        title={`Editar ${l.nome}`}
+                        aria-label={`Editar ${l.nome}`}
+                      >
                         <Pencil size={13} />
                       </Button>
                       <Button
@@ -322,6 +369,8 @@ function LojasTab() {
                         variant="ghost"
                         className="h-7 w-7 text-destructive hover:text-destructive"
                         onClick={() => handleDelete(l)}
+                        title={`Excluir ${l.nome}`}
+                        aria-label={`Excluir ${l.nome}`}
                       >
                         <Trash2 size={13} />
                       </Button>
@@ -478,15 +527,25 @@ function TextosTab() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSave() {
-    saveCopyTemplates(form);
-    toast.success("Textos de cópia salvos");
+  async function handleSave() {
+    try {
+      await saveCopyTemplates(form);
+      toast.success("Textos de cópia salvos");
+    } catch {
+      toast.error("Não foi possível salvar os textos na nuvem", {
+        description: "Verifique as migrações do Supabase e tente novamente.",
+      });
+    }
   }
 
-  function handleReset() {
-    setForm(DEFAULT_COPY_TEMPLATES);
-    saveCopyTemplates(DEFAULT_COPY_TEMPLATES);
-    toast.success("Textos restaurados");
+  async function handleReset() {
+    try {
+      await saveCopyTemplates(DEFAULT_COPY_TEMPLATES);
+      setForm(DEFAULT_COPY_TEMPLATES);
+      toast.success("Textos restaurados");
+    } catch {
+      toast.error("Não foi possível restaurar os textos na nuvem");
+    }
   }
 
   const gruposPlaceholders = [
@@ -520,6 +579,9 @@ function TextosTab() {
         "[Loja]",
         "[RedeLoja]",
         "[Local]",
+        "[Endereco]",
+        "[Responsavel]",
+        "[LojaContato]",
         "[Setor]",
         "[Data]",
         "[Horario]",

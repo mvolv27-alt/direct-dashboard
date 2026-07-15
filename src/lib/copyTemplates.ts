@@ -1,5 +1,10 @@
 import type { Demanda, DemandaAlocacao, Diarista } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  adoptLegacyStorage,
+  requireActiveUserId,
+  scopedStorageKey,
+} from "@/lib/userScope";
 
 export const COPY_TEMPLATES_KEY = "direct.copy-templates.v6";
 export const COPY_TEMPLATES_EVENT = "direct:copy-templates-changed";
@@ -15,12 +20,10 @@ export const DEFAULT_COPY_TEMPLATES: CopyTemplates = {
   escalaGerente: "\uD83D\uDCCB *ESCALA FECHADA*\n\n[Escala]",
   vagasDisponiveis: "\uD83D\uDFE2 *VAGAS DISPON\u00CDVEIS*\n\n[Vagas]",
   escalaDiarista:
-    "\u2705 *CONFIRMA\u00C7\u00C3O DE ESCALA*\n\n\uD83D\uDCCD [RedeLoja]\n\uD83C\uDFF7\uFE0F [Setor]\n\n*Diarista:* [Diarista]\n*CPF:* [CPF]\n\n[EscalaDiarista]\n\n\n[FaltaTexto]",
+    "\u2705 *CONFIRMA\u00C7\u00C3O DE ESCALA*\n\n\uD83D\uDCCD [RedeLoja]\n\uD83C\uDFE0 *Endere\u00E7o:* [Endereco]\n\uD83D\uDC64 *Ao chegar, procurar por:* [Responsavel]\n\uD83C\uDFF7\uFE0F [Setor]\n\n*Diarista:* [Diarista]\n*CPF:* [CPF]\n\n[EscalaDiarista]\n\n\n[FaltaTexto]",
   textoFalta:
     "\u26A0\uFE0F Em caso de falta, avise com anteced\u00EAncia. Faltas sem aviso podem prejudicar as empresas e oportunidades futuras.",
 };
-
-const COPY_TEMPLATES_ROW_ID = "default";
 
 function hasEncodingArtifacts(value: unknown) {
   return (
@@ -42,13 +45,15 @@ function normalizeTemplates(saved: Partial<CopyTemplates> = {}): CopyTemplates {
 }
 
 function writeLocalCopyTemplates(templates: CopyTemplates) {
-  localStorage.setItem(COPY_TEMPLATES_KEY, JSON.stringify(templates));
+  localStorage.setItem(scopedStorageKey(COPY_TEMPLATES_KEY), JSON.stringify(templates));
   window.dispatchEvent(new CustomEvent(COPY_TEMPLATES_EVENT));
 }
 
 function templatesToRow(templates: CopyTemplates) {
+  const userId = requireActiveUserId();
   return {
-    id: COPY_TEMPLATES_ROW_ID,
+    id: `user-${userId}`,
+    user_id: userId,
     escala_gerente: templates.escalaGerente,
     vagas_disponiveis: templates.vagasDisponiveis,
     escala_diarista: templates.escalaDiarista,
@@ -71,18 +76,16 @@ function rowToTemplates(row: {
 }
 
 async function saveCopyTemplatesToCloud(templates: CopyTemplates) {
-  try {
-    await supabase
-      .from("copy_templates")
-      .upsert(templatesToRow(templates), { onConflict: "id" });
-  } catch {
-    /* local copy remains available until the next sync */
-  }
+  const { error } = await supabase
+    .from("copy_templates")
+    .upsert(templatesToRow(templates), { onConflict: "user_id" });
+  if (error) throw error;
 }
 
 export function getCopyTemplates(): CopyTemplates {
   try {
-    const raw = localStorage.getItem(COPY_TEMPLATES_KEY);
+    adoptLegacyStorage([COPY_TEMPLATES_KEY]);
+    const raw = localStorage.getItem(scopedStorageKey(COPY_TEMPLATES_KEY));
     const saved = raw ? (JSON.parse(raw) as Partial<CopyTemplates>) : {};
     return normalizeTemplates(saved);
   } catch {
@@ -90,9 +93,9 @@ export function getCopyTemplates(): CopyTemplates {
   }
 }
 
-export function saveCopyTemplates(templates: CopyTemplates) {
+export async function saveCopyTemplates(templates: CopyTemplates) {
+  await saveCopyTemplatesToCloud(templates);
   writeLocalCopyTemplates(templates);
-  void saveCopyTemplatesToCloud(templates);
 }
 
 export async function syncCopyTemplatesFromCloud() {
@@ -101,7 +104,7 @@ export async function syncCopyTemplatesFromCloud() {
     const { data, error } = await supabase
       .from("copy_templates")
       .select("*")
-      .eq("id", COPY_TEMPLATES_ROW_ID)
+      .eq("user_id", requireActiveUserId())
       .maybeSingle();
     if (!error && data) {
       writeLocalCopyTemplates(rowToTemplates(data));

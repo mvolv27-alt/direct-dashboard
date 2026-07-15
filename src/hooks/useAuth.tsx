@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
+import { setActiveUserScope } from "@/lib/userScope";
 
 const LOCAL_ACCESS_KEY = "direct.local.access";
 const LOCAL_ACCESS_ENABLED =
-  import.meta.env.DEV || import.meta.env.VITE_ENABLE_LOCAL_ACCESS === "true";
+  import.meta.env.DEV && import.meta.env.VITE_ENABLE_LOCAL_ACCESS === "true";
 const LOCAL_ACCESS_EMAIL = import.meta.env.VITE_LOCAL_ACCESS_EMAIL ?? "";
 const LOCAL_ACCESS_PASSWORD = import.meta.env.VITE_LOCAL_ACCESS_PASSWORD ?? "";
 
@@ -57,10 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setActiveUserScope(s?.user.id, s?.user.email);
       if (s) {
         localStorage.removeItem(LOCAL_ACCESS_KEY);
       } else if (LOCAL_ACCESS_ENABLED && localStorage.getItem(LOCAL_ACCESS_KEY) === "true") {
-        setSession(createLocalSession());
+        const localSession = createLocalSession();
+        setActiveUserScope(localSession.user.id, localSession.user.email);
+        setSession(localSession);
         setLoading(false);
         return;
       }
@@ -71,11 +75,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(LOCAL_ACCESS_KEY);
     }
     supabase.auth.getSession().then(({ data }) => {
+      setActiveUserScope(data.session?.user.id, data.session?.user.email);
       if (data.session) {
         localStorage.removeItem(LOCAL_ACCESS_KEY);
         setSession(data.session);
       } else if (LOCAL_ACCESS_ENABLED && localStorage.getItem(LOCAL_ACCESS_KEY) === "true") {
-        setSession(createLocalSession());
+        const localSession = createLocalSession();
+        setActiveUserScope(localSession.user.id, localSession.user.email);
+        setSession(localSession);
       } else {
         setSession(null);
       }
@@ -91,12 +98,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password === LOCAL_ACCESS_PASSWORD;
     if (!isAllowed) return false;
     localStorage.setItem(LOCAL_ACCESS_KEY, "true");
-    setSession(createLocalSession());
+    const localSession = createLocalSession();
+    setActiveUserScope(localSession.user.id, localSession.user.email);
+    setSession(localSession);
     return true;
   }
 
   async function signOut() {
     localStorage.removeItem(LOCAL_ACCESS_KEY);
+    setActiveUserScope(null);
     setSession(null);
     await supabase.auth.signOut();
   }
