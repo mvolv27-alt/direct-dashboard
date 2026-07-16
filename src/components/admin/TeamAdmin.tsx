@@ -42,8 +42,14 @@ export default function TeamAdmin() {
       supabase.from("supervisor_invites").select("*").order("invited_at", { ascending: false }),
     ]);
     if (profilesResult.error || invitesResult.error) {
+      const databaseError = profilesResult.error || invitesResult.error;
+      const missingMigration =
+        databaseError?.code === "42P01" ||
+        databaseError?.message?.includes("supervisor_invites");
       toast.error("Não foi possível carregar a equipe", {
-        description: "Execute a migração de administração no Supabase.",
+        description: missingMigration
+          ? "A tabela de equipe ainda não existe. Execute a migração de administração no Supabase."
+          : databaseError?.message || "Verifique a conexão e as permissões do Supabase.",
       });
     }
     setProfiles((profilesResult.data as TeamProfile[] | null) || []);

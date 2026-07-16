@@ -228,45 +228,6 @@ function totalVagasDemanda(d: Demanda) {
   return Math.max(1, d.tarefasTotal || normalizeAlocacoes(d).length || 1);
 }
 
-function intervaloDemanda(data: string, entrada: string, saida?: string) {
-  if (!data || !entrada) return null;
-  const inicio = new Date(`${data}T${entrada}:00`);
-  const fim = new Date(`${data}T${saida || entrada}:00`);
-  if (!saida) fim.setHours(fim.getHours() + 8);
-  if (fim <= inicio) fim.setDate(fim.getDate() + 1);
-  return { inicio: inicio.getTime(), fim: fim.getTime() };
-}
-
-function horariosConflitam(
-  dataA: string,
-  entradaA: string,
-  saidaA: string | undefined,
-  demandaB: Demanda,
-) {
-  const a = intervaloDemanda(dataA, entradaA, saidaA);
-  const b = intervaloDemanda(demandaB.data, demandaB.horario, demandaB.horarioSaida);
-  return Boolean(a && b && a.inicio < b.fim && b.inicio < a.fim);
-}
-
-function encontrarConflitoDiarista(
-  demandas: Demanda[],
-  diaristaId: string,
-  datas: string[],
-  entrada: string,
-  saida?: string,
-  ignorarDemandaId?: string | null,
-) {
-  if (!diaristaId || !entrada) return undefined;
-  return demandas.find((demanda) => {
-    if (demanda.id === ignorarDemandaId) return false;
-    const estaAlocado = normalizeAlocacoes(demanda).some(
-      (alocacao) =>
-        (alocacao.reposicao?.diaristaId || alocacao.diaristaId) === diaristaId,
-    );
-    return estaAlocado && datas.some((data) => horariosConflitam(data, entrada, saida, demanda));
-  });
-}
-
 function vagasLivresDemanda(d: Demanda) {
   return Math.max(0, totalVagasDemanda(d) - normalizeAlocacoes(d).length);
 }
@@ -752,20 +713,6 @@ export default function DemandasPage() {
       toast.error("A quantidade de diaristas já atingiu o número de vagas");
       return;
     }
-    const conflito = encontrarConflitoDiarista(
-      demandas,
-      d.id,
-      form.datas,
-      form.horario,
-      form.horarioSaida,
-      editingId,
-    );
-    if (conflito) {
-      toast.error(`${d.nome} já está alocado nesse horário`, {
-        description: `${conflito.codigo} · ${conflito.loja} · ${conflito.horario}${conflito.horarioSaida ? ` às ${conflito.horarioSaida}` : ""}`,
-      });
-      return;
-    }
     const next = [
       ...form.alocacoes,
       {
@@ -802,30 +749,6 @@ export default function DemandasPage() {
     }
     const vagas = Math.max(1, Math.floor(form.vagas || 1));
     const selectedAlocacoes = form.alocacoes.slice(0, vagas);
-    const alocacoesParaValidar =
-      selectedAlocacoes.length > 0
-        ? selectedAlocacoes
-        : editingId
-          ? normalizeAlocacoes(demandas.find((d) => d.id === editingId)!)
-          : [];
-    for (const alocacao of alocacoesParaValidar) {
-      const diaristaId = alocacao.reposicao?.diaristaId || alocacao.diaristaId;
-      const conflito = encontrarConflitoDiarista(
-        demandas,
-        diaristaId,
-        form.datas,
-        form.horario,
-        form.horarioSaida,
-        editingId,
-      );
-      if (conflito) {
-        toast.error(`${nomeEfetivoAlocacao(alocacao)} já está alocado nesse horário`, {
-          description: `${conflito.codigo} · ${conflito.loja} · ${conflito.horario}`,
-        });
-        return;
-      }
-    }
-
     if (editingId) {
       const existing = demandas.find((d) => d.id === editingId)!;
       const alocacoes = (selectedAlocacoes.length > 0 ? selectedAlocacoes : normalizeAlocacoes(existing)).slice(0, vagas);
@@ -1037,22 +960,6 @@ export default function DemandasPage() {
       toast.error("Informe o nome do diarista da reposição");
       return;
     }
-    if (reposicao.diaristaId) {
-      const conflito = encontrarConflitoDiarista(
-        demandas,
-        reposicao.diaristaId,
-        [d.data],
-        d.horario,
-        d.horarioSaida,
-        d.id,
-      );
-      if (conflito) {
-        toast.error(`${nome} já está alocado nesse horário`, {
-          description: `${conflito.codigo} · ${conflito.loja}`,
-        });
-        return;
-      }
-    }
     const vagas = Math.max(1, d.tarefasTotal || 1);
     const alocacoes = normalizeAlocacoes(d).map((a) =>
       a.id === alocacaoId
@@ -1091,20 +998,6 @@ export default function DemandasPage() {
     }
     if (alocacoes.length >= vagas) {
       toast.error("Todas as vagas dessa demanda já foram preenchidas");
-      return;
-    }
-    const conflito = encontrarConflitoDiarista(
-      demandas,
-      diaristaId,
-      [d.data],
-      d.horario,
-      d.horarioSaida,
-      d.id,
-    );
-    if (conflito) {
-      toast.error(`${diaristaNome} já está alocado nesse horário`, {
-        description: `${conflito.codigo} · ${conflito.loja}`,
-      });
       return;
     }
     const next = [
