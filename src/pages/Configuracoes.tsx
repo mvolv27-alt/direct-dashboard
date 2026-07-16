@@ -51,6 +51,10 @@ import {
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useProfile } from "@/hooks/useProfile";
+import TeamAdmin from "@/components/admin/TeamAdmin";
+import AuditHistory from "@/components/admin/AuditHistory";
+import { History, UserCog } from "lucide-react";
 
 const SETORES_PADRAO = [
   "Açougueiro",
@@ -69,6 +73,8 @@ const fmt = (n: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n || 0);
 
 export default function ConfiguracoesPage() {
+  const { isAdmin } = useProfile();
+
   return (
     <div className="space-y-5 min-w-0 overflow-x-hidden">
       <div className="min-w-0">
@@ -79,7 +85,7 @@ export default function ConfiguracoesPage() {
       </div>
 
       <Tabs defaultValue="lojas" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 sm:w-auto sm:inline-flex">
+        <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto sm:w-auto sm:inline-flex">
           <TabsTrigger value="lojas" className="gap-1.5">
             <Store size={14} /> Lojas
           </TabsTrigger>
@@ -89,15 +95,29 @@ export default function ConfiguracoesPage() {
           <TabsTrigger value="redes" className="gap-1.5">
             <Network size={14} /> Redes
           </TabsTrigger>
-          <TabsTrigger value="textos" className="gap-1.5">
-            <FileText size={14} /> Textos
-          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="textos" className="gap-1.5">
+              <FileText size={14} /> Textos
+            </TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="equipe" className="gap-1.5">
+              <UserCog size={14} /> Equipe
+            </TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="auditoria" className="gap-1.5">
+              <History size={14} /> Histórico
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="lojas"><LojasTab /></TabsContent>
         <TabsContent value="setores"><SetoresTab /></TabsContent>
         <TabsContent value="redes"><RedesTab /></TabsContent>
-        <TabsContent value="textos"><TextosTab /></TabsContent>
+        {isAdmin && <TabsContent value="textos"><TextosTab /></TabsContent>}
+        {isAdmin && <TabsContent value="equipe"><TeamAdmin /></TabsContent>}
+        {isAdmin && <TabsContent value="auditoria"><AuditHistory /></TabsContent>}
       </Tabs>
     </div>
   );

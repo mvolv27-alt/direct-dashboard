@@ -1,17 +1,22 @@
 ﻿import { ReactNode, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useState } from "react";
 import {
   Users,
   DollarSign,
   ClipboardList,
   LogOut,
   Settings,
+  Cloud,
+  CloudOff,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import {
   startSync,
   hasLegacyLocalData,
   migrateLegacyLocalData,
+  useSyncStatus,
 } from "@/lib/sync";
 import { syncCopyTemplatesFromCloud } from "@/lib/copyTemplates";
 import { Button } from "@/components/ui/button";
@@ -23,6 +28,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import ThemeToggle from "@/components/ThemeToggle";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { supabase } from "@/integrations/supabase/client";
 
 const navItems = [
   { to: "/demandas", label: "Demandas", icon: ClipboardList },
@@ -34,6 +43,10 @@ const navItems = [
 export default function AppLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { session, user, isLocalAccess, signOut } = useAuth();
+  const syncStatus = useSyncStatus();
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const mustSetPassword = !!user && "user_metadata" in user && !!user.user_metadata?.must_set_password;
 
   useEffect(() => {
     if (!session || isLocalAccess) return;
@@ -65,12 +78,47 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     toast.success("Sessão encerrada");
   }
 
+  async function saveFirstPassword() {
+    if (newPassword.length < 8) {
+      toast.error("A senha precisa ter pelo menos 8 caracteres");
+      return;
+    }
+    setSavingPassword(true);
+    const metadata = user && "user_metadata" in user ? user.user_metadata : {};
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+      data: { ...metadata, must_set_password: false },
+    });
+    setSavingPassword(false);
+    if (error) {
+      toast.error("Não foi possível definir a senha", { description: error.message });
+      return;
+    }
+    toast.success("Senha definida com sucesso");
+    window.location.reload();
+  }
+
   const compact = true;
   const sidebarW = "lg:w-16";
 
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex min-h-dvh w-full">
+        <Dialog open={mustSetPassword}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Defina sua senha</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">Este é seu primeiro acesso. Crie uma senha para entrar novamente depois.</p>
+            <div className="grid gap-1.5">
+              <Label htmlFor="first-password">Nova senha</Label>
+              <Input id="first-password" type="password" minLength={8} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" />
+            </div>
+            <Button onClick={() => void saveFirstPassword()} disabled={savingPassword}>
+              {savingPassword ? "Salvando..." : "Salvar senha e continuar"}
+            </Button>
+          </DialogContent>
+        </Dialog>
         <aside
           className={`fixed top-0 left-0 lg:sticky lg:top-3 z-50 hidden h-fit max-h-[calc(100dvh-1.5rem)] my-3 ml-3 gradient-sidebar flex-col rounded-2xl border border-sidebar-border shadow-xl overflow-visible transition-all duration-300 ease-in-out lg:flex ${sidebarW}`}
         >
@@ -120,6 +168,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             })}
           </nav>
 
+          <SyncIndicator status={syncStatus} compact />
+
           {session && (
             <div className={`border-t border-sidebar-border space-y-2 ${compact ? "px-2 py-3" : "p-4"}`}>
               {!compact && (
@@ -164,6 +214,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <p className="truncate text-[11px] text-muted-foreground">Gestão de diaristas</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <SyncIndicator status={syncStatus} compact />
                 <ThemeToggle />
                 <Button
                   type="button"
@@ -205,5 +256,43 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </nav>
       </div>
     </TooltipProvider>
+  );
+}
+
+function SyncIndicator({
+  status,
+  compact,
+}: {
+  status: ReturnType<typeof useSyncStatus>;
+  compact?: boolean;
+}) {
+  const label = !status.online
+    ? "Offline"
+    : status.pending > 0
+      ? `${status.pending} envio(s) pendente(s)`
+      : status.syncing
+        ? "Sincronizando"
+        : "Sincronizado";
+  const Icon = !status.online ? CloudOff : status.syncing || status.pending > 0 ? RefreshCw : Cloud;
+  const color = !status.online
+    ? "text-destructive"
+    : status.pending > 0
+      ? "text-amber-500"
+      : "text-emerald-500";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          role="status"
+          aria-label={label}
+          className={`flex items-center gap-2 ${compact ? "justify-center px-2 py-2" : "px-3 py-2"}`}
+        >
+          <Icon size={15} className={`${color} ${status.syncing ? "animate-spin" : ""}`} />
+          {!compact && <span className="text-xs text-muted-foreground">{label}</span>}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={10}>{label}</TooltipContent>
+    </Tooltip>
   );
 }

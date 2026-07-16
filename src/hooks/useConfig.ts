@@ -220,7 +220,7 @@ function useTable<T extends { id: string }>(table: "lojas" | "setor_valores" | "
     }
     adoptLegacyStorage([LOCAL_CONFIG_PREFIX + table]);
     const localRows = readLocalRows<T>(table);
-    const { data, error } = await supabase.from(table).select("*").eq("user_id", userId);
+    const { data, error } = await supabase.from(table).select("*");
     if (!error && data && data.length > 0) {
       setRows(mergeRows(table, data as unknown as T[], localRows));
     } else {
@@ -231,15 +231,15 @@ function useTable<T extends { id: string }>(table: "lojas" | "setor_valores" | "
 
   useEffect(() => {
     refresh();
+    const channelName = `cfg:${requireActiveUserId()}:${table}:${crypto.randomUUID()}`;
     const channel = supabase
-      .channel(`cfg:${requireActiveUserId()}:${table}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table,
-          filter: `user_id=eq.${requireActiveUserId()}`,
         },
         () => refresh(),
       )
@@ -280,9 +280,9 @@ export async function upsertLoja(l: Partial<Loja> & { id?: string }) {
     uf: l.uf ?? "CE",
     ativo: l.ativo ?? true,
   };
-  const result = await supabase
-    .from("lojas")
-    .upsert({ ...row, user_id: userId }, { onConflict: "id" });
+  const result = l.id && !isDefaultId
+    ? await supabase.from("lojas").update(row).eq("id", l.id)
+    : await supabase.from("lojas").insert({ ...row, user_id: userId });
   if (!result.error) {
     upsertLocalRow<Loja>(
       "lojas",
@@ -296,8 +296,7 @@ export const deleteLoja = async (id: string) => {
   const result = await supabase
     .from("lojas")
     .delete()
-    .eq("id", id)
-    .eq("user_id", requireActiveUserId());
+    .eq("id", id);
   if (!result.error) removeLocalRow<Loja>("lojas", id);
   return result;
 };
@@ -311,9 +310,9 @@ export async function upsertSetorValor(s: { setor: string; valor_min: number; va
     valor_min: s.valor_min,
     valor_max: s.valor_max,
   };
-  const result = await supabase
-    .from("setor_valores")
-    .upsert({ ...row, user_id: userId }, { onConflict: "user_id,setor" });
+  const result = s.id && !isDefaultId
+    ? await supabase.from("setor_valores").update(row).eq("id", s.id)
+    : await supabase.from("setor_valores").insert({ ...row, user_id: userId });
   if (!result.error) {
     upsertLocalRow<SetorValor>(
       "setor_valores",
@@ -327,8 +326,7 @@ export const deleteSetorValor = async (id: string) => {
   const result = await supabase
     .from("setor_valores")
     .delete()
-    .eq("id", id)
-    .eq("user_id", requireActiveUserId());
+    .eq("id", id);
   if (!result.error) removeLocalRow<SetorValor>("setor_valores", id);
   return result;
 };
@@ -341,9 +339,9 @@ export async function upsertRedeValor(r: { rede: string; valor_recebido: number;
     rede: r.rede,
     valor_recebido: r.valor_recebido,
   };
-  const result = await supabase
-    .from("rede_valores")
-    .upsert({ ...row, user_id: userId }, { onConflict: "user_id,rede" });
+  const result = r.id && !isDefaultId
+    ? await supabase.from("rede_valores").update(row).eq("id", r.id)
+    : await supabase.from("rede_valores").insert({ ...row, user_id: userId });
   if (!result.error) {
     upsertLocalRow<RedeValor>(
       "rede_valores",
@@ -357,8 +355,7 @@ export const deleteRedeValor = async (id: string) => {
   const result = await supabase
     .from("rede_valores")
     .delete()
-    .eq("id", id)
-    .eq("user_id", requireActiveUserId());
+    .eq("id", id);
   if (!result.error) removeLocalRow<RedeValor>("rede_valores", id);
   return result;
 };

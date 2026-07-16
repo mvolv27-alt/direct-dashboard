@@ -32,6 +32,8 @@ export type TableName =
   | "registros_financeiros"
   | "setores_custom";
 
+const SHARED_TABLES = new Set<TableName>(["setores_custom"]);
+
 type DbRow = Record<string, unknown>;
 type MapperResult = Diarista | Demanda | RegistroFinanceiro | string;
 type CloudResult = PromiseLike<{ error: unknown }>;
@@ -412,12 +414,14 @@ export type SyncStatus = {
   online: boolean;
   pending: number;
   lastSyncedAt: number | null;
+  syncing: boolean;
 };
 
 let currentStatus: SyncStatus = {
   online: typeof navigator !== "undefined" ? navigator.onLine : true,
   pending: readOutbox().length,
   lastSyncedAt: null,
+  syncing: false,
 };
 
 function emitStatus(patch?: Partial<SyncStatus>) {
@@ -477,7 +481,10 @@ let realtimeChannels: ReturnType<typeof subscribeRealtime>[] = [];
 
 async function fetchAll(table: TableName) {
   const userId = requireActiveUserId();
-  const { data, error } = await tableQuery(table).select("*").eq("user_id", userId);
+  const query = tableQuery(table).select("*");
+  const { data, error } = SHARED_TABLES.has(table)
+    ? await query
+    : await query.eq("user_id", userId);
   if (error) throw error;
   if (!data) return;
   const rows = (data as DbRow[]).map(mappers[table].fromRow);
@@ -508,11 +515,12 @@ async function uploadCurrentCacheToCloud(tables: TableName[]) {
 
 function subscribeRealtime(table: TableName) {
   const userId = requireActiveUserId();
+  const realtimeFilter = SHARED_TABLES.has(table) ? {} : { filter: `user_id=eq.${userId}` };
   const channel = supabase
     .channel(`direct:${userId}:${table}`)
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table, filter: `user_id=eq.${userId}` },
+      { event: "*", schema: "public", table, ...realtimeFilter },
       (payload: RealtimePayload) => {
         const map = mappers[table];
         if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
@@ -549,6 +557,7 @@ export async function startSync(userId: string) {
   realtimeChannels = [];
   startedUserId = userId;
   setActiveUserScope(userId);
+  emitStatus({ syncing: true });
   const tables: TableName[] = [
     "diaristas",
     "demandas",
@@ -580,12 +589,13 @@ export async function startSync(userId: string) {
   await flushOutbox();
   // realtime subscriptions
   realtimeChannels = tables.map(subscribeRealtime);
-  emitStatus({ lastSyncedAt: Date.now() });
+  emitStatus({ lastSyncedAt: Date.now(), syncing: false });
   const failedFetches = fetchResults.filter(
     (result): result is PromiseRejectedResult => result.status === "rejected",
   );
   if (failedFetches.length > 0 && navigator.onLine) {
     startedUserId = "";
+    emitStatus({ syncing: false });
     throw new Error("O banco ainda não está preparado para separar os dados por supervisor.");
   }
 }

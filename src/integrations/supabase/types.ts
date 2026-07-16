@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          actor_email: string
+          actor_id: string | null
+          created_at: string
+          id: number
+          new_data: Json | null
+          old_data: Json | null
+          owner_id: string | null
+          record_id: string
+          table_name: string
+        }
+        Insert: {
+          action: string
+          actor_email?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: number
+          new_data?: Json | null
+          old_data?: Json | null
+          owner_id?: string | null
+          record_id: string
+          table_name: string
+        }
+        Update: {
+          action?: string
+          actor_email?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: number
+          new_data?: Json | null
+          old_data?: Json | null
+          owner_id?: string | null
+          record_id?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
       copy_templates: {
         Row: {
           created_at: string
@@ -276,21 +315,30 @@ export type Database = {
       }
       profiles: {
         Row: {
+          active: boolean
           created_at: string
+          email: string
           id: string
           nome: string | null
+          role: string
           updated_at: string
         }
         Insert: {
+          active?: boolean
           created_at?: string
+          email?: string
           id: string
           nome?: string | null
+          role?: string
           updated_at?: string
         }
         Update: {
+          active?: boolean
           created_at?: string
+          email?: string
           id?: string
           nome?: string | null
+          role?: string
           updated_at?: string
         }
         Relationships: []
@@ -436,12 +484,48 @@ export type Database = {
         }
         Relationships: []
       }
+      supervisor_invites: {
+        Row: {
+          accepted_at: string | null
+          email: string
+          id: string
+          invited_at: string
+          invited_by: string
+          invited_user_id: string | null
+          role: string
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          email: string
+          id?: string
+          invited_at?: string
+          invited_by: string
+          invited_user_id?: string | null
+          role?: string
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          email?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string
+          invited_user_id?: string | null
+          role?: string
+          status?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: {
+        Args: { check_user_id?: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

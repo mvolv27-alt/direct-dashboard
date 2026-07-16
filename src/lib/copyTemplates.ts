@@ -104,7 +104,8 @@ export async function syncCopyTemplatesFromCloud() {
     const { data, error } = await supabase
       .from("copy_templates")
       .select("*")
-      .eq("user_id", requireActiveUserId())
+      .order("updated_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (!error && data) {
       writeLocalCopyTemplates(rowToTemplates(data));

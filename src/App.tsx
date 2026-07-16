@@ -4,15 +4,17 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
+import { lazy, Suspense } from "react";
 import AppLayout from "@/components/AppLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AuthProvider } from "@/hooks/useAuth";
-import Diaristas from "@/pages/Diaristas";
-import Financeiro from "@/pages/Financeiro";
-import Demandas from "@/pages/Demandas";
-import Auth from "@/pages/Auth";
-import Configuracoes from "@/pages/Configuracoes";
-import NotFound from "./pages/NotFound";
+
+const Diaristas = lazy(() => import("@/pages/Diaristas"));
+const Financeiro = lazy(() => import("@/pages/Financeiro"));
+const Demandas = lazy(() => import("@/pages/Demandas"));
+const Auth = lazy(() => import("@/pages/Auth"));
+const Configuracoes = lazy(() => import("@/pages/Configuracoes"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
@@ -29,17 +31,19 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <HashRouter>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/" element={<Navigate to="/demandas" replace />} />
-              <Route path="/demandas" element={<Protected><Demandas /></Protected>} />
-              <Route path="/diaristas" element={<Protected><Diaristas /></Protected>} />
-              <Route path="/financeiro" element={<Protected><Financeiro /></Protected>} />
-              <Route path="/configuracoes" element={<Protected><Configuracoes /></Protected>} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </HashRouter>
+          <Suspense fallback={<div className="grid min-h-dvh place-items-center text-sm text-muted-foreground">Carregando...</div>}>
+            <HashRouter>
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/" element={<Navigate to="/demandas" replace />} />
+                <Route path="/demandas" element={<Protected><Demandas /></Protected>} />
+                <Route path="/diaristas" element={<Protected><Diaristas /></Protected>} />
+                <Route path="/financeiro" element={<Protected><Financeiro /></Protected>} />
+                <Route path="/configuracoes" element={<Protected><Configuracoes /></Protected>} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </HashRouter>
+          </Suspense>
         </TooltipProvider>
       </AuthProvider>
     </ThemeProvider>

@@ -408,6 +408,20 @@ function enderecoCompletoLoja(loja?: Loja) {
     .join(" - ") || "Não informado";
 }
 
+function lojasIncompletas(demandas: Demanda[], lojas: Loja[]) {
+  const avisos = new Map<string, string[]>();
+  demandas.forEach((demanda) => {
+    const loja = findLojaCadastro(demanda, lojas);
+    const nome = loja?.nome || demandaLoja(demanda) || "Loja não identificada";
+    const faltando = [
+      !enderecoCompletoLoja(loja) && "endereço",
+      !loja?.responsavel?.trim() && "responsável",
+    ].filter(Boolean) as string[];
+    if (faltando.length) avisos.set(nome, faltando);
+  });
+  return Array.from(avisos, ([nome, campos]) => `${nome}: ${campos.join(" e ")}`);
+}
+
 function nomeRedeLoja(demanda: Demanda, loja?: Loja) {
   const rede = demandaRede(demanda);
   const nome = loja?.nome || demandaLoja(demanda);
@@ -897,6 +911,26 @@ export default function DemandasPage() {
     setCopyPanel(type);
   }
 
+  function copyWithStoreWarning(
+    texto: string,
+    successMessage: string,
+    demandasIncluidas: Demanda[],
+  ) {
+    const missing = lojasIncompletas(demandasIncluidas, lojasCadastradas);
+    if (missing.length === 0) {
+      void copyToClipboard(texto, successMessage);
+      return;
+    }
+    toast.warning("Complete os dados das lojas antes de enviar", {
+      description: missing.slice(0, 3).join(" • "),
+      duration: 12000,
+      action: {
+        label: "Copiar mesmo assim",
+        onClick: () => void copyToClipboard(texto, successMessage),
+      },
+    });
+  }
+
   function handleReposicaoAlocacao(
     d: Demanda,
     alocacaoId: string,
@@ -1142,11 +1176,12 @@ export default function DemandasPage() {
             <Button
               size="sm"
               onClick={() =>
-                copyToClipboard(
+                copyWithStoreWarning(
                   copyDraft,
                   type === "gerente"
                     ? "Escala copiada para enviar ao gerente"
                     : "Vagas disponíveis copiadas",
+                  demandasNoTexto,
                 )
               }
             >
@@ -2221,6 +2256,28 @@ function DemandaCard({
 
   async function copiarEscalaDraft(alocacao: DemandaAlocacao) {
     const nome = nomeEfetivoAlocacao(alocacao);
+    const diaristaId = alocacao.reposicao?.diaristaId || alocacao.diaristaId;
+    const demandasIncluidas = demandas.filter((item) =>
+      normalizeAlocacoes(item).some((itemAlocacao) =>
+        alocacaoMatchesDiarista(itemAlocacao, diaristaId, nome),
+      ),
+    );
+    const missing = lojasIncompletas(demandasIncluidas, lojas);
+    if (missing.length > 0) {
+      toast.warning("A escala possui loja com cadastro incompleto", {
+        description: missing.slice(0, 3).join(" • "),
+        duration: 12000,
+        action: {
+          label: "Copiar mesmo assim",
+          onClick: () => void copiarEscalaSemAviso(nome),
+        },
+      });
+      return;
+    }
+    await copiarEscalaSemAviso(nome);
+  }
+
+  async function copiarEscalaSemAviso(nome: string) {
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(escalaDraft);
