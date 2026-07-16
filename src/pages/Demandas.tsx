@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useLiveData } from "@/lib/sync";
 import {
   getDemandas,
@@ -24,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -224,6 +226,45 @@ function demandaStatusFromAlocacoes(alocacoes: DemandaAlocacao[], vagas: number)
 
 function totalVagasDemanda(d: Demanda) {
   return Math.max(1, d.tarefasTotal || normalizeAlocacoes(d).length || 1);
+}
+
+function intervaloDemanda(data: string, entrada: string, saida?: string) {
+  if (!data || !entrada) return null;
+  const inicio = new Date(`${data}T${entrada}:00`);
+  const fim = new Date(`${data}T${saida || entrada}:00`);
+  if (!saida) fim.setHours(fim.getHours() + 8);
+  if (fim <= inicio) fim.setDate(fim.getDate() + 1);
+  return { inicio: inicio.getTime(), fim: fim.getTime() };
+}
+
+function horariosConflitam(
+  dataA: string,
+  entradaA: string,
+  saidaA: string | undefined,
+  demandaB: Demanda,
+) {
+  const a = intervaloDemanda(dataA, entradaA, saidaA);
+  const b = intervaloDemanda(demandaB.data, demandaB.horario, demandaB.horarioSaida);
+  return Boolean(a && b && a.inicio < b.fim && b.inicio < a.fim);
+}
+
+function encontrarConflitoDiarista(
+  demandas: Demanda[],
+  diaristaId: string,
+  datas: string[],
+  entrada: string,
+  saida?: string,
+  ignorarDemandaId?: string | null,
+) {
+  if (!diaristaId || !entrada) return undefined;
+  return demandas.find((demanda) => {
+    if (demanda.id === ignorarDemandaId) return false;
+    const estaAlocado = normalizeAlocacoes(demanda).some(
+      (alocacao) =>
+        (alocacao.reposicao?.diaristaId || alocacao.diaristaId) === diaristaId,
+    );
+    return estaAlocado && datas.some((data) => horariosConflitam(data, entrada, saida, demanda));
+  });
 }
 
 function vagasLivresDemanda(d: Demanda) {
@@ -430,6 +471,7 @@ function nomeRedeLoja(demanda: Demanda, loja?: Loja) {
 }
 
 export default function DemandasPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const demandas = useLiveData(getDemandas, ["demandas"]);
   const diaristas = useLiveData(getDiaristas, ["diaristas"]);
   const setoresExtra = useLiveData(getSetoresCustom, ["setores_custom"]);
@@ -459,6 +501,23 @@ export default function DemandasPage() {
     horario: "todos",
   });
   const knownGroupsRef = useRef({ redes: new Set<string>(), lojas: new Set<string>() });
+
+  useEffect(() => {
+    const requestedSearch = searchParams.get("busca");
+    const shouldCreate = searchParams.get("nova") === "1";
+    if (requestedSearch) setSearch(requestedSearch);
+    if (shouldCreate) {
+      setEditingId(null);
+      setForm(createEmptyForm());
+      setOpen(true);
+    }
+    if (requestedSearch || shouldCreate) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("busca");
+      next.delete("nova");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const toggleRede = (rede: string) =>
     setCollapsedRedes((prev) => {
@@ -693,6 +752,20 @@ export default function DemandasPage() {
       toast.error("A quantidade de diaristas já atingiu o número de vagas");
       return;
     }
+    const conflito = encontrarConflitoDiarista(
+      demandas,
+      d.id,
+      form.datas,
+      form.horario,
+      form.horarioSaida,
+      editingId,
+    );
+    if (conflito) {
+      toast.error(`${d.nome} já está alocado nesse horário`, {
+        description: `${conflito.codigo} · ${conflito.loja} · ${conflito.horario}${conflito.horarioSaida ? ` às ${conflito.horarioSaida}` : ""}`,
+      });
+      return;
+    }
     const next = [
       ...form.alocacoes,
       {
@@ -729,6 +802,29 @@ export default function DemandasPage() {
     }
     const vagas = Math.max(1, Math.floor(form.vagas || 1));
     const selectedAlocacoes = form.alocacoes.slice(0, vagas);
+    const alocacoesParaValidar =
+      selectedAlocacoes.length > 0
+        ? selectedAlocacoes
+        : editingId
+          ? normalizeAlocacoes(demandas.find((d) => d.id === editingId)!)
+          : [];
+    for (const alocacao of alocacoesParaValidar) {
+      const diaristaId = alocacao.reposicao?.diaristaId || alocacao.diaristaId;
+      const conflito = encontrarConflitoDiarista(
+        demandas,
+        diaristaId,
+        form.datas,
+        form.horario,
+        form.horarioSaida,
+        editingId,
+      );
+      if (conflito) {
+        toast.error(`${nomeEfetivoAlocacao(alocacao)} já está alocado nesse horário`, {
+          description: `${conflito.codigo} · ${conflito.loja} · ${conflito.horario}`,
+        });
+        return;
+      }
+    }
 
     if (editingId) {
       const existing = demandas.find((d) => d.id === editingId)!;
@@ -941,6 +1037,22 @@ export default function DemandasPage() {
       toast.error("Informe o nome do diarista da reposição");
       return;
     }
+    if (reposicao.diaristaId) {
+      const conflito = encontrarConflitoDiarista(
+        demandas,
+        reposicao.diaristaId,
+        [d.data],
+        d.horario,
+        d.horarioSaida,
+        d.id,
+      );
+      if (conflito) {
+        toast.error(`${nome} já está alocado nesse horário`, {
+          description: `${conflito.codigo} · ${conflito.loja}`,
+        });
+        return;
+      }
+    }
     const vagas = Math.max(1, d.tarefasTotal || 1);
     const alocacoes = normalizeAlocacoes(d).map((a) =>
       a.id === alocacaoId
@@ -979,6 +1091,20 @@ export default function DemandasPage() {
     }
     if (alocacoes.length >= vagas) {
       toast.error("Todas as vagas dessa demanda já foram preenchidas");
+      return;
+    }
+    const conflito = encontrarConflitoDiarista(
+      demandas,
+      diaristaId,
+      [d.data],
+      d.horario,
+      d.horarioSaida,
+      d.id,
+    );
+    if (conflito) {
+      toast.error(`${diaristaNome} já está alocado nesse horário`, {
+        description: `${conflito.codigo} · ${conflito.loja}`,
+      });
       return;
     }
     const next = [
@@ -1233,6 +1359,9 @@ export default function DemandasPage() {
           <DialogContent className="max-w-md w-full max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-5 text-sm">
             <DialogHeader>
               <DialogTitle>{editingId ? "Editar" : "Nova"} Demanda</DialogTitle>
+              <DialogDescription>
+                Defina datas, horários, vagas e diaristas para esta escala.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-2">
               {/* Datas (multi-select) */}

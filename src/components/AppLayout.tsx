@@ -10,6 +10,7 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
+  LayoutDashboard,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -34,6 +35,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 
 const navItems = [
+  { to: "/dashboard", label: "Central", icon: LayoutDashboard },
   { to: "/demandas", label: "Demandas", icon: ClipboardList },
   { to: "/diaristas", label: "Diaristas", icon: Users },
   { to: "/financeiro", label: "Financeiro", icon: DollarSign },
@@ -234,7 +236,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/92 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden">
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-5 gap-1">
             {navItems.map((item) => {
               const active = location.pathname === item.to;
               return (

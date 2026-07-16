@@ -10,6 +10,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { AuthProvider } from "@/hooks/useAuth";
 
 const Diaristas = lazy(() => import("@/pages/Diaristas"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Financeiro = lazy(() => import("@/pages/Financeiro"));
 const Demandas = lazy(() => import("@/pages/Demandas"));
 const Auth = lazy(() => import("@/pages/Auth"));
@@ -35,7 +36,8 @@ const App = () => (
             <HashRouter>
               <Routes>
                 <Route path="/auth" element={<Auth />} />
-                <Route path="/" element={<Navigate to="/demandas" replace />} />
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
                 <Route path="/demandas" element={<Protected><Demandas /></Protected>} />
                 <Route path="/diaristas" element={<Protected><Diaristas /></Protected>} />
                 <Route path="/financeiro" element={<Protected><Financeiro /></Protected>} />
