@@ -47,7 +47,7 @@ const CACHE_PREFIX = "direct.cache::";
 const OUTBOX_KEY = "direct.outbox::v1";
 const DATA_EVENT = "direct:data-changed";
 const STATUS_EVENT = "direct:sync-status";
-const BACKGROUND_REFRESH_MS = 10_000;
+const BACKGROUND_REFRESH_MS = 5_000;
 const SYNC_TABLES: TableName[] = [
   "diaristas",
   "demandas",
@@ -325,23 +325,26 @@ export const getCachedSetores = (): string[] => readCache<string>("setores_custo
 async function tryCloud(fn: () => CloudResult, fallback: () => void) {
   if (!navigator.onLine) {
     fallback();
-    return;
+    return false;
   }
   try {
     const { error } = await fn();
     if (error) throw error;
+    return true;
   } catch {
     fallback();
+    return false;
   }
 }
 
 async function cloudInsert<T extends { id: string }>(table: TableName, row: T) {
   upsertInCache(table, row);
   const payload = mappers[table].toRow(row);
-  await tryCloud(
+  const saved = await tryCloud(
     () => upsertPayload(table, payload),
     () => enqueue({ table, op: "insert", payload }),
   );
+  if (saved) void refreshTablesFromCloud([table]);
 }
 async function cloudUpdate<T extends { id: string }>(table: TableName, row: T) {
   upsertInCache(table, row);
@@ -350,7 +353,7 @@ async function cloudUpdate<T extends { id: string }>(table: TableName, row: T) {
     id: row.id,
     user_id: requireActiveUserId(),
   } as DbRow & { id: string };
-  await tryCloud(
+  const saved = await tryCloud(
     () =>
       tableQuery(table)
         .update(payload as never)
@@ -358,10 +361,11 @@ async function cloudUpdate<T extends { id: string }>(table: TableName, row: T) {
         .eq("user_id", requireActiveUserId()) as CloudResult,
     () => enqueue({ table, op: "update", payload }),
   );
+  if (saved) void refreshTablesFromCloud([table]);
 }
 async function cloudDelete(table: TableName, id: string) {
   removeFromCache(table, id);
-  await tryCloud(
+  const saved = await tryCloud(
     () =>
       tableQuery(table)
         .delete()
@@ -369,6 +373,7 @@ async function cloudDelete(table: TableName, id: string) {
         .eq("user_id", requireActiveUserId()) as CloudResult,
     () => enqueue({ table, op: "delete", id }),
   );
+  if (saved) void refreshTablesFromCloud([table]);
 }
 
 // Strongly-typed wrappers used by storage.ts
@@ -393,7 +398,7 @@ export async function upsertSetorCustom(nome: string) {
     all.push(nome);
     writeCache("setores_custom", all);
   }
-  await tryCloud(
+  const saved = await tryCloud(
     () =>
       supabase
         .from("setores_custom")
@@ -408,6 +413,7 @@ export async function upsertSetorCustom(nome: string) {
         payload: { nome, user_id: requireActiveUserId() },
       }),
   );
+  if (saved) void refreshTablesFromCloud(["setores_custom"]);
 }
 
 // ------------------------------------------------------------
@@ -507,21 +513,10 @@ async function refreshTablesFromCloud(tables: TableName[] = SYNC_TABLES, showSyn
   return results;
 }
 
-async function uploadCurrentCacheToCloud(tables: TableName[]) {
-  if (!navigator.onLine) return;
-  for (const table of tables) {
-    const rows = readCache<unknown>(table);
-    for (const row of rows) {
-      const payload = mappers[table].toRow(row);
-      if (table !== "setores_custom" && !payload.id) continue;
-      try {
-        const { error } = await upsertPayload(table, payload);
-        if (error) throw error;
-      } catch {
-        enqueue({ table, op: "insert", payload });
-      }
-    }
-  }
+export async function forceCloudSync(tables: TableName[] = SYNC_TABLES) {
+  emitStatus({ syncing: true });
+  await flushOutbox();
+  return refreshTablesFromCloud(tables, true);
 }
 
 function subscribeRealtime(table: TableName) {
@@ -624,10 +619,8 @@ export async function startSync(userId: string) {
     Object.values(LEGACY).forEach((key) => localStorage.removeItem(key));
   }
 
-  // First send local cached rows and queued writes so data created in local/offline mode reaches the cloud.
-  await uploadCurrentCacheToCloud(tables);
+  // First drain queued writes, then always trust the cloud as the current source.
   await flushOutbox();
-  // Then hydrate from cloud with the latest shared data.
   const fetchResults = await refreshTablesFromCloud(tables, true);
   // Retry anything that could not be sent on the first pass.
   await flushOutbox();
