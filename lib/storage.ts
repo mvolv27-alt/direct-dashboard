@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Compatibility wrapper kept so existing pages keep working.
  * Reads return data from the in-memory localStorage cache that
  * the sync layer keeps up-to-date in real time. Writes are

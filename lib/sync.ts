@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  *  Hybrid Cloud + Offline Sync Layer
  * ------------------------------------------------------------
@@ -16,6 +16,15 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Diarista, RegistroFinanceiro, Demanda } from "@/types";
+import {
+  adoptLegacyStorage,
+  canAdoptLegacyStorage,
+  getActiveUserId,
+  requireActiveUserId,
+  scopedStorageKey,
+  setActiveUserScope,
+  USER_SCOPE_EVENT,
+} from "@/lib/userScope";
 
 export type TableName =
   | "diaristas"
@@ -23,17 +32,35 @@ export type TableName =
   | "registros_financeiros"
   | "setores_custom";
 
+const SHARED_TABLES = new Set<TableName>(["setores_custom"]);
+
+type DbRow = Record<string, unknown>;
+type MapperResult = Diarista | Demanda | RegistroFinanceiro | string;
+type CloudResult = PromiseLike<{ error: unknown }>;
+type RealtimePayload = {
+  eventType: "INSERT" | "UPDATE" | "DELETE";
+  new: DbRow;
+  old: DbRow;
+};
+
 const CACHE_PREFIX = "direct.cache::";
 const OUTBOX_KEY = "direct.outbox::v1";
 const DATA_EVENT = "direct:data-changed";
 const STATUS_EVENT = "direct:sync-status";
+const BACKGROUND_REFRESH_MS = 10_000;
+const SYNC_TABLES: TableName[] = [
+  "diaristas",
+  "demandas",
+  "registros_financeiros",
+  "setores_custom",
+];
 
 // ------------------------------------------------------------
 //  Cache helpers
 // ------------------------------------------------------------
 function readCache<T>(key: TableName): T[] {
   try {
-    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    const raw = localStorage.getItem(scopedStorageKey(CACHE_PREFIX + key));
     return raw ? (JSON.parse(raw) as T[]) : [];
   } catch {
     return [];
@@ -42,7 +69,7 @@ function readCache<T>(key: TableName): T[] {
 
 function writeCache<T>(key: TableName, rows: T[]) {
   try {
-    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(rows));
+    localStorage.setItem(scopedStorageKey(CACHE_PREFIX + key), JSON.stringify(rows));
     window.dispatchEvent(new CustomEvent(DATA_EVENT, { detail: { table: key } }));
   } catch {
     /* ignore quota */
@@ -66,18 +93,20 @@ function removeFromCache<T extends { id: string }>(key: TableName, id: string) {
 //  Mappers: DB row <-> app type
 // ------------------------------------------------------------
 const num = (v: unknown): number => (typeof v === "number" ? v : Number(v) || 0);
+const text = (v: unknown): string => (typeof v === "string" ? v : "");
+const dateText = (v: unknown): string => text(v) || new Date().toISOString();
 
-function diaristaFromRow(r: any): Diarista {
+function diaristaFromRow(r: DbRow): Diarista {
   return {
-    id: r.id,
-    nome: r.nome ?? "",
-    cpf: r.cpf ?? "",
-    telefone: r.telefone ?? "",
-    bairro: r.bairro ?? "",
+    id: text(r.id),
+    nome: text(r.nome),
+    cpf: text(r.cpf),
+    telefone: text(r.telefone),
+    bairro: text(r.bairro),
     setorExperiencia: Array.isArray(r.setor_experiencia) ? r.setor_experiencia : [],
-    presencas: r.presencas ?? 0,
-    faltas: r.faltas ?? 0,
-    createdAt: r.created_at ?? new Date().toISOString(),
+    presencas: num(r.presencas),
+    faltas: num(r.faltas),
+    createdAt: dateText(r.created_at),
   };
 }
 function diaristaToRow(d: Diarista) {
@@ -93,39 +122,42 @@ function diaristaToRow(d: Diarista) {
   };
 }
 
-function demandaFromRow(r: any): Demanda {
-  let observacoes = r.observacoes ?? "";
+function demandaFromRow(r: DbRow): Demanda {
+  let observacoes = text(r.observacoes);
   let alocacoes: Demanda["alocacoes"] = undefined;
   try {
     const meta = JSON.parse(observacoes);
-    if (meta?.__directMeta === 1) {
-      observacoes = meta.observacoes ?? "";
-      alocacoes = Array.isArray(meta.alocacoes) ? meta.alocacoes : undefined;
+    if (typeof meta === "object" && meta && "__directMeta" in meta) {
+      const typed = meta as { __directMeta?: number; observacoes?: unknown; alocacoes?: unknown };
+      if (typed.__directMeta === 1) {
+        observacoes = text(typed.observacoes);
+        alocacoes = Array.isArray(typed.alocacoes) ? (typed.alocacoes as Demanda["alocacoes"]) : undefined;
+      }
     }
   } catch {
     /* observacoes antigas em texto puro */
   }
 
   return {
-    id: r.id,
-    codigo: r.codigo ?? "",
-    data: r.data ?? "",
-    horario: r.horario ?? "",
-    horarioSaida: r.horario_saida ?? "",
-    rede: r.rede ?? "",
-    loja: r.loja ?? "",
-    setor: r.setor ?? "",
+    id: text(r.id),
+    codigo: text(r.codigo),
+    data: text(r.data),
+    horario: text(r.horario || r.horario_entrada),
+    horarioSaida: text(r.horario_saida),
+    rede: text(r.rede),
+    loja: text(r.loja),
+    setor: text(r.setor),
     valor: num(r.valor),
-    diaristaId: r.diarista_id ?? undefined,
-    diaristaNome: r.diarista_nome ?? "",
-    tarefasTotal: r.tarefas_total ?? 1,
-    tarefasConcluidas: r.tarefas_concluidas ?? 0,
-    status: (r.status ?? "pendente") as Demanda["status"],
-    checkInAt: r.check_in_at ?? undefined,
-    checkInBy: r.check_in_by || undefined,
+    diaristaId: text(r.diarista_id) || undefined,
+    diaristaNome: text(r.diarista_nome),
+    tarefasTotal: num(r.tarefas_total) || 1,
+    tarefasConcluidas: num(r.tarefas_concluidas),
+    status: (text(r.status) || "pendente") as Demanda["status"],
+    checkInAt: text(r.check_in_at) || undefined,
+    checkInBy: text(r.check_in_by) || undefined,
     alocacoes,
     observacoes,
-    createdAt: r.created_at ?? new Date().toISOString(),
+    createdAt: dateText(r.created_at),
   };
 }
 function demandaToRow(d: Demanda) {
@@ -157,24 +189,24 @@ function demandaToRow(d: Demanda) {
   };
 }
 
-function registroFromRow(r: any): RegistroFinanceiro {
+function registroFromRow(r: DbRow): RegistroFinanceiro {
   return {
-    id: r.id,
-    diaristaId: r.diarista_id ?? "",
-    diaristaNome: r.diarista_nome ?? "",
-    loja: r.loja ?? "",
-    data: r.data ?? "",
-    horarioEntrada: r.horario_entrada ?? "",
-    horarioSaida: r.horario_saida ?? "",
-    setor: r.setor ?? "",
+    id: text(r.id),
+    diaristaId: text(r.diarista_id),
+    diaristaNome: text(r.diarista_nome),
+    loja: text(r.loja),
+    data: text(r.data),
+    horarioEntrada: text(r.horario_entrada),
+    horarioSaida: text(r.horario_saida),
+    setor: text(r.setor),
     valorDiaria: num(r.valor_diaria),
     passagem: num(r.passagem),
     adiantamento: num(r.adiantamento),
     custosAdicionais: num(r.custos_adicionais),
     pago: !!r.pago,
-    pagoEm: r.pago_em ?? null,
-    observacoes: r.observacoes ?? "",
-    createdAt: r.created_at ?? new Date().toISOString(),
+    pagoEm: text(r.pago_em) || null,
+    observacoes: text(r.observacoes),
+    createdAt: dateText(r.created_at),
   };
 }
 function registroToRow(r: RegistroFinanceiro) {
@@ -197,12 +229,12 @@ function registroToRow(r: RegistroFinanceiro) {
   };
 }
 
-function setorFromRow(r: any): string {
-  return r.nome;
+function setorFromRow(r: DbRow): string {
+  return text(r.nome);
 }
 
 // Generic mapping registry
-const mappers: Record<TableName, { fromRow: (r: any) => any; toRow: (r: any) => any }> = {
+const mappers: Record<TableName, { fromRow: (r: DbRow) => MapperResult; toRow: (r: unknown) => DbRow }> = {
   diaristas: { fromRow: diaristaFromRow, toRow: diaristaToRow },
   demandas: { fromRow: demandaFromRow, toRow: demandaToRow },
   registros_financeiros: { fromRow: registroFromRow, toRow: registroToRow },
@@ -213,25 +245,39 @@ const mappers: Record<TableName, { fromRow: (r: any) => any; toRow: (r: any) => 
 //  Outbox (offline write queue)
 // ------------------------------------------------------------
 type OutboxOp =
-  | { table: TableName; op: "insert"; payload: any }
-  | { table: TableName; op: "update"; payload: any }
+  | { table: TableName; op: "insert"; payload: DbRow }
+  | { table: TableName; op: "update"; payload: DbRow & { id: string } }
   | { table: TableName; op: "delete"; id: string };
+
+function tableQuery(table: TableName) {
+  return supabase.from(table as never);
+}
 
 function readOutbox(): OutboxOp[] {
   try {
-    return JSON.parse(localStorage.getItem(OUTBOX_KEY) || "[]");
+    return JSON.parse(localStorage.getItem(scopedStorageKey(OUTBOX_KEY)) || "[]");
   } catch {
     return [];
   }
 }
 function writeOutbox(ops: OutboxOp[]) {
-  localStorage.setItem(OUTBOX_KEY, JSON.stringify(ops));
+  localStorage.setItem(scopedStorageKey(OUTBOX_KEY), JSON.stringify(ops));
   emitStatus();
 }
 function enqueue(op: OutboxOp) {
   const all = readOutbox();
   all.push(op);
   writeOutbox(all);
+}
+
+function upsertPayload(table: TableName, payload: DbRow): CloudResult {
+  const ownedPayload = { ...payload, user_id: requireActiveUserId() };
+  if (table === "setores_custom") {
+    return supabase
+      .from("setores_custom")
+      .upsert(ownedPayload as never, { onConflict: "user_id,nome" }) as CloudResult;
+  }
+  return tableQuery(table).upsert(ownedPayload as never, { onConflict: "id" }) as CloudResult;
 }
 
 async function flushOutbox(): Promise<void> {
@@ -242,11 +288,20 @@ async function flushOutbox(): Promise<void> {
   for (const op of all) {
     try {
       if (op.op === "insert") {
-        await supabase.from(op.table as any).insert(op.payload);
+        const { error } = await upsertPayload(op.table, op.payload);
+        if (error) throw error;
       } else if (op.op === "update") {
-        await supabase.from(op.table as any).update(op.payload).eq("id", op.payload.id);
+        const { error } = await tableQuery(op.table)
+          .update({ ...op.payload, user_id: requireActiveUserId() } as never)
+          .eq("id", op.payload.id)
+          .eq("user_id", requireActiveUserId());
+        if (error) throw error;
       } else {
-        await supabase.from(op.table as any).delete().eq("id", op.id);
+        const { error } = await tableQuery(op.table)
+          .delete()
+          .eq("id", op.id)
+          .eq("user_id", requireActiveUserId());
+        if (error) throw error;
       }
     } catch {
       remaining.push(op);
@@ -267,7 +322,7 @@ export const getCachedSetores = (): string[] => readCache<string>("setores_custo
 // ------------------------------------------------------------
 //  Public write API (optimistic, async, queues if offline)
 // ------------------------------------------------------------
-async function tryCloud(fn: () => Promise<any>, fallback: () => void) {
+async function tryCloud(fn: () => CloudResult, fallback: () => void) {
   if (!navigator.onLine) {
     fallback();
     return;
@@ -284,22 +339,34 @@ async function cloudInsert<T extends { id: string }>(table: TableName, row: T) {
   upsertInCache(table, row);
   const payload = mappers[table].toRow(row);
   await tryCloud(
-    () => supabase.from(table as any).insert(payload) as any,
+    () => upsertPayload(table, payload),
     () => enqueue({ table, op: "insert", payload }),
   );
 }
 async function cloudUpdate<T extends { id: string }>(table: TableName, row: T) {
   upsertInCache(table, row);
-  const payload = mappers[table].toRow(row);
+  const payload = {
+    ...mappers[table].toRow(row),
+    id: row.id,
+    user_id: requireActiveUserId(),
+  } as DbRow & { id: string };
   await tryCloud(
-    () => supabase.from(table as any).update(payload).eq("id", row.id) as any,
+    () =>
+      tableQuery(table)
+        .update(payload as never)
+        .eq("id", row.id)
+        .eq("user_id", requireActiveUserId()) as CloudResult,
     () => enqueue({ table, op: "update", payload }),
   );
 }
 async function cloudDelete(table: TableName, id: string) {
   removeFromCache(table, id);
   await tryCloud(
-    () => supabase.from(table as any).delete().eq("id", id) as any,
+    () =>
+      tableQuery(table)
+        .delete()
+        .eq("id", id)
+        .eq("user_id", requireActiveUserId()) as CloudResult,
     () => enqueue({ table, op: "delete", id }),
   );
 }
@@ -327,8 +394,19 @@ export async function upsertSetorCustom(nome: string) {
     writeCache("setores_custom", all);
   }
   await tryCloud(
-    () => supabase.from("setores_custom").insert({ nome }) as any,
-    () => enqueue({ table: "setores_custom", op: "insert", payload: { nome } }),
+    () =>
+      supabase
+        .from("setores_custom")
+        .upsert(
+          { nome, user_id: requireActiveUserId() } as never,
+          { onConflict: "user_id,nome" },
+        ) as CloudResult,
+    () =>
+      enqueue({
+        table: "setores_custom",
+        op: "insert",
+        payload: { nome, user_id: requireActiveUserId() },
+      }),
   );
 }
 
@@ -339,12 +417,14 @@ export type SyncStatus = {
   online: boolean;
   pending: number;
   lastSyncedAt: number | null;
+  syncing: boolean;
 };
 
 let currentStatus: SyncStatus = {
   online: typeof navigator !== "undefined" ? navigator.onLine : true,
   pending: readOutbox().length,
   lastSyncedAt: null,
+  syncing: false,
 };
 
 function emitStatus(patch?: Partial<SyncStatus>) {
@@ -385,9 +465,11 @@ export function useLiveData<T>(getter: () => T, tables: TableName[]): T {
     };
     window.addEventListener(DATA_EVENT, refresh);
     window.addEventListener("storage", refresh);
+    window.addEventListener(USER_SCOPE_EVENT, refresh);
     return () => {
       window.removeEventListener(DATA_EVENT, refresh);
       window.removeEventListener("storage", refresh);
+      window.removeEventListener(USER_SCOPE_EVENT, refresh);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tables.join(",")]);
@@ -397,74 +479,170 @@ export function useLiveData<T>(getter: () => T, tables: TableName[]): T {
 // ------------------------------------------------------------
 //  Realtime + initial fetch (called once from AppLayout)
 // ------------------------------------------------------------
-let started = false;
+let startedUserId = "";
+let realtimeChannels: ReturnType<typeof subscribeRealtime>[] = [];
+let backgroundRefreshTimer: number | null = null;
+let refreshInFlight = false;
 
 async function fetchAll(table: TableName) {
-  const { data, error } = await supabase.from(table as any).select("*");
-  if (error || !data) return;
-  const rows = (data as any[]).map(mappers[table].fromRow);
+  const userId = requireActiveUserId();
+  const query = tableQuery(table).select("*");
+  const { data, error } = SHARED_TABLES.has(table)
+    ? await query
+    : await query.eq("user_id", userId);
+  if (error) throw error;
+  if (!data) return;
+  const rows = (data as DbRow[]).map(mappers[table].fromRow);
   writeCache(table, rows);
   emitStatus({ lastSyncedAt: Date.now() });
 }
 
+async function refreshTablesFromCloud(tables: TableName[] = SYNC_TABLES, showSync = false) {
+  if (!navigator.onLine || refreshInFlight) return [];
+  refreshInFlight = true;
+  if (showSync) emitStatus({ syncing: true });
+  const results = await Promise.allSettled(tables.map(fetchAll));
+  refreshInFlight = false;
+  emitStatus({ lastSyncedAt: Date.now(), syncing: false });
+  return results;
+}
+
+async function uploadCurrentCacheToCloud(tables: TableName[]) {
+  if (!navigator.onLine) return;
+  for (const table of tables) {
+    const rows = readCache<unknown>(table);
+    for (const row of rows) {
+      const payload = mappers[table].toRow(row);
+      if (table !== "setores_custom" && !payload.id) continue;
+      try {
+        const { error } = await upsertPayload(table, payload);
+        if (error) throw error;
+      } catch {
+        enqueue({ table, op: "insert", payload });
+      }
+    }
+  }
+}
+
 function subscribeRealtime(table: TableName) {
+  const userId = requireActiveUserId();
+  const realtimeFilter = SHARED_TABLES.has(table) ? {} : { filter: `user_id=eq.${userId}` };
   const channel = supabase
-    .channel(`direct:${table}`)
+    .channel(`direct:${userId}:${table}:${crypto.randomUUID()}`)
     .on(
-      "postgres_changes" as any,
-      { event: "*", schema: "public", table },
-      (payload: any) => {
+      "postgres_changes",
+      { event: "*", schema: "public", table, ...realtimeFilter },
+      (payload: RealtimePayload) => {
         const map = mappers[table];
         if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
           const row = map.fromRow(payload.new);
           if (table === "setores_custom") {
+            const setor = String(row || "");
             const all = readCache<string>("setores_custom");
-            if (!all.includes(row)) {
-              all.push(row);
+            if (setor && !all.includes(setor)) {
+              all.push(setor);
               writeCache("setores_custom", all);
             }
           } else {
-            upsertInCache(table, row);
+            upsertInCache(table, row as Diarista | Demanda | RegistroFinanceiro);
           }
         } else if (payload.eventType === "DELETE") {
           if (table === "setores_custom") {
-            const removed = payload.old?.nome;
+            const removed = text(payload.old?.nome);
             const all = readCache<string>("setores_custom").filter((n) => n !== removed);
             writeCache("setores_custom", all);
           } else if (payload.old?.id) {
-            removeFromCache(table, payload.old.id);
+            removeFromCache(table, text(payload.old.id));
           }
         }
         emitStatus({ lastSyncedAt: Date.now() });
       },
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        void refreshTablesFromCloud([table]);
+      }
+    });
   return channel;
 }
 
-export async function startSync() {
-  if (started) return;
-  started = true;
-  const tables: TableName[] = [
-    "diaristas",
-    "demandas",
-    "registros_financeiros",
-    "setores_custom",
-  ];
+function stopRealtimeSync() {
+  realtimeChannels.forEach((channel) => void supabase.removeChannel(channel));
+  realtimeChannels = [];
+  if (backgroundRefreshTimer) {
+    window.clearInterval(backgroundRefreshTimer);
+    backgroundRefreshTimer = null;
+  }
+  window.removeEventListener("online", handleOnline);
+  window.removeEventListener("offline", handleOffline);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+}
 
-  window.addEventListener("online", () => {
-    emitStatus();
-    flushOutbox();
-  });
-  window.addEventListener("offline", () => emitStatus());
+function handleOnline() {
+  emitStatus();
+  void flushOutbox().then(() => refreshTablesFromCloud(SYNC_TABLES, true));
+}
 
-  // hydrate from cloud
-  await Promise.all(tables.map(fetchAll));
-  // drain any queued offline writes
+function handleOffline() {
+  emitStatus();
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === "visible") {
+    void refreshTablesFromCloud(SYNC_TABLES, true);
+  }
+}
+
+function startBackgroundRefresh() {
+  if (backgroundRefreshTimer) window.clearInterval(backgroundRefreshTimer);
+  backgroundRefreshTimer = window.setInterval(() => {
+    void flushOutbox().then(() => refreshTablesFromCloud());
+  }, BACKGROUND_REFRESH_MS);
+  window.addEventListener("online", handleOnline);
+  window.addEventListener("offline", handleOffline);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+}
+
+export async function startSync(userId: string) {
+  if (!userId) return;
+  if (startedUserId === userId) {
+    void refreshTablesFromCloud(SYNC_TABLES, true);
+    return;
+  }
+  stopRealtimeSync();
+  startedUserId = userId;
+  setActiveUserScope(userId);
+  emitStatus({ syncing: true });
+  const tables = SYNC_TABLES;
+
+  adoptLegacyStorage([
+    ...tables.map((table) => CACHE_PREFIX + table),
+    OUTBOX_KEY,
+    MIGRATED_FLAG,
+  ]);
+  if (localStorage.getItem(scopedStorageKey(MIGRATED_FLAG))) {
+    Object.values(LEGACY).forEach((key) => localStorage.removeItem(key));
+  }
+
+  // First send local cached rows and queued writes so data created in local/offline mode reaches the cloud.
+  await uploadCurrentCacheToCloud(tables);
+  await flushOutbox();
+  // Then hydrate from cloud with the latest shared data.
+  const fetchResults = await refreshTablesFromCloud(tables, true);
+  // Retry anything that could not be sent on the first pass.
   await flushOutbox();
   // realtime subscriptions
-  tables.forEach(subscribeRealtime);
-  emitStatus({ lastSyncedAt: Date.now() });
+  realtimeChannels = tables.map(subscribeRealtime);
+  startBackgroundRefresh();
+  emitStatus({ lastSyncedAt: Date.now(), syncing: false });
+  const failedFetches = fetchResults.filter(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (failedFetches.length > 0 && navigator.onLine) {
+    startedUserId = "";
+    emitStatus({ syncing: false });
+    throw new Error("O banco ainda não está preparado para separar os dados por supervisor.");
+  }
 }
 
 // ------------------------------------------------------------
@@ -485,7 +663,8 @@ export async function migrateLegacyLocalData(): Promise<{
   setores: number;
 }> {
   const result = { diaristas: 0, demandas: 0, registros: 0, setores: 0 };
-  if (localStorage.getItem(MIGRATED_FLAG)) return result;
+  if (!canAdoptLegacyStorage()) return result;
+  if (localStorage.getItem(scopedStorageKey(MIGRATED_FLAG))) return result;
 
   const legacyDiaristas = JSON.parse(localStorage.getItem(LEGACY.diaristas) || "[]");
   for (const d of legacyDiaristas) {
@@ -519,12 +698,17 @@ export async function migrateLegacyLocalData(): Promise<{
     result.setores++;
   }
 
-  localStorage.setItem(MIGRATED_FLAG, new Date().toISOString());
+  localStorage.setItem(scopedStorageKey(MIGRATED_FLAG), new Date().toISOString());
+  Object.values(LEGACY).forEach((key) => localStorage.removeItem(key));
   return result;
 }
 
 export function hasLegacyLocalData(): boolean {
-  if (localStorage.getItem(MIGRATED_FLAG)) return false;
+  if (
+    !getActiveUserId() ||
+    !canAdoptLegacyStorage() ||
+    localStorage.getItem(scopedStorageKey(MIGRATED_FLAG))
+  ) return false;
   return [LEGACY.diaristas, LEGACY.financeiro, LEGACY.setores, LEGACY.demandas].some(
     (k) => {
       try {
