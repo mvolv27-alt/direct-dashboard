@@ -3,100 +3,218 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 
-for (const file of [".env.local", ".env"]) {
+for (const file of [".env.test", ".env.local", ".env"]) {
   const path = resolve(process.cwd(), file);
   if (!existsSync(path)) continue;
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
     const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (match && !process.env[match[1]]) process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, "");
+    if (match && !process.env[match[1]]) {
+      process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, "");
+    }
   }
 }
 
 const url = process.env.VITE_SUPABASE_URL;
 const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const accounts = [
-  { email: process.env.TEST_USER_A_EMAIL, password: process.env.TEST_USER_A_PASSWORD },
-  { email: process.env.TEST_USER_B_EMAIL, password: process.env.TEST_USER_B_PASSWORD },
-];
+const expectedProjectId = process.env.TEST_EXPECTED_PROJECT_ID;
 
-if (!url || !key || accounts.some((account) => !account.email || !account.password)) {
-  console.error("Defina VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY e TEST_USER_A/B_EMAIL/PASSWORD.");
+const accounts = {
+  admin: {
+    email: process.env.TEST_ADMIN_EMAIL,
+    password: process.env.TEST_ADMIN_PASSWORD,
+  },
+  supervisorA: {
+    email: process.env.TEST_SUPERVISOR_A_EMAIL || process.env.TEST_USER_A_EMAIL,
+    password: process.env.TEST_SUPERVISOR_A_PASSWORD || process.env.TEST_USER_A_PASSWORD,
+  },
+  supervisorB: {
+    email: process.env.TEST_SUPERVISOR_B_EMAIL || process.env.TEST_USER_B_EMAIL,
+    password: process.env.TEST_SUPERVISOR_B_PASSWORD || process.env.TEST_USER_B_PASSWORD,
+  },
+};
+
+const missing = [
+  !url && "VITE_SUPABASE_URL",
+  !key && "VITE_SUPABASE_PUBLISHABLE_KEY",
+  !expectedProjectId && "TEST_EXPECTED_PROJECT_ID",
+  !accounts.admin.email && "TEST_ADMIN_EMAIL",
+  !accounts.admin.password && "TEST_ADMIN_PASSWORD",
+  !accounts.supervisorA.email && "TEST_SUPERVISOR_A_EMAIL",
+  !accounts.supervisorA.password && "TEST_SUPERVISOR_A_PASSWORD",
+  !accounts.supervisorB.email && "TEST_SUPERVISOR_B_EMAIL",
+  !accounts.supervisorB.password && "TEST_SUPERVISOR_B_PASSWORD",
+].filter(Boolean);
+
+if (missing.length > 0) {
+  console.error(`Configure as variaveis de homologacao: ${missing.join(", ")}.`);
   process.exit(1);
 }
 
-const clients = accounts.map(() => createClient(url, key, { auth: { persistSession: false } }));
-for (let index = 0; index < clients.length; index += 1) {
-  const { error } = await clients[index].auth.signInWithPassword(accounts[index]);
-  if (error) throw new Error(`Falha no login da conta ${index + 1}: ${error.message}`);
+if (process.env.TEST_ALLOW_REMOTE_MUTATION !== "true") {
+  console.error("Defina TEST_ALLOW_REMOTE_MUTATION=true somente no projeto de homologacao.");
+  process.exit(1);
 }
 
-const token = `isolation-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
-const privateIds = [crypto.randomUUID(), crypto.randomUUID()];
-const privateDemandId = crypto.randomUUID();
-const privateFinanceId = crypto.randomUUID();
-const sharedStoreId = crypto.randomUUID();
+const projectIdFromUrl = new URL(url).hostname.split(".")[0];
+if (projectIdFromUrl !== expectedProjectId) {
+  console.error("TEST_EXPECTED_PROJECT_ID nao corresponde ao projeto Supabase configurado.");
+  process.exit(1);
+}
 
-async function assertNoError(label, result) {
+const clients = Object.fromEntries(
+  Object.keys(accounts).map((name) => [
+    name,
+    createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }),
+  ]),
+);
+
+for (const [name, client] of Object.entries(clients)) {
+  const { error } = await client.auth.signInWithPassword(accounts[name]);
+  if (error) throw new Error(`Falha no login de ${name}: ${error.message}`);
+}
+
+const users = {};
+for (const [name, client] of Object.entries(clients)) {
+  const { data, error } = await client.auth.getUser();
+  if (error || !data.user) throw new Error(`Nao foi possivel ler o usuario ${name}.`);
+  users[name] = data.user;
+}
+
+if (new Set(Object.values(users).map((user) => user.id)).size !== 3) {
+  throw new Error("As tres credenciais de teste precisam pertencer a contas diferentes.");
+}
+
+const { data: adminProfile, error: adminProfileError } = await clients.admin
+  .from("profiles")
+  .select("role,active")
+  .eq("id", users.admin.id)
+  .single();
+if (adminProfileError || adminProfile?.role !== "admin" || !adminProfile.active) {
+  throw new Error("A conta TEST_ADMIN_EMAIL nao possui perfil administrativo ativo.");
+}
+
+const token = `direct-rls-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+const ids = {
+  diaristaA: crypto.randomUUID(),
+  diaristaB: crypto.randomUUID(),
+  demandaA: crypto.randomUUID(),
+  financeiroA: crypto.randomUUID(),
+  loja: crypto.randomUUID(),
+  templateAttempt: `test-${crypto.randomUUID()}`,
+};
+
+async function requireSuccess(label, result) {
   if (result.error) throw new Error(`${label}: ${result.error.message}`);
   return result.data;
 }
 
-try {
-  for (let index = 0; index < clients.length; index += 1) {
-    const { data: authData } = await clients[index].auth.getUser();
-    await assertNoError(
-      `criar diarista da conta ${index + 1}`,
-      await clients[index].from("diaristas").insert({
-        id: privateIds[index],
-        user_id: authData.user.id,
-        nome: `${token}-conta-${index + 1}`,
-      }),
-    );
-  }
-
-  const ownA = await assertNoError("ler registro próprio A", await clients[0].from("diaristas").select("id").eq("id", privateIds[0]));
-  const leakAtoB = await assertNoError("testar vazamento A para B", await clients[1].from("diaristas").select("id").eq("id", privateIds[0]));
-  const leakBtoA = await assertNoError("testar vazamento B para A", await clients[0].from("diaristas").select("id").eq("id", privateIds[1]));
-  if (ownA.length !== 1 || leakAtoB.length !== 0 || leakBtoA.length !== 0) {
-    throw new Error("Falha de isolamento: uma conta conseguiu ler o cadastro privado da outra.");
-  }
-
-  const { data: userA } = await clients[0].auth.getUser();
-  await assertNoError("criar demanda privada A", await clients[0].from("demandas").insert({
-    id: privateDemandId,
-    user_id: userA.user.id,
-    data: new Date().toISOString().slice(0, 10),
-    codigo: token,
-  }));
-  await assertNoError("criar financeiro privado A", await clients[0].from("registros_financeiros").insert({
-    id: privateFinanceId,
-    user_id: userA.user.id,
-    data: new Date().toISOString().slice(0, 10),
-    diarista_nome: token,
-  }));
-  const demandLeak = await assertNoError("testar demanda A para B", await clients[1].from("demandas").select("id").eq("id", privateDemandId));
-  const financeLeak = await assertNoError("testar financeiro A para B", await clients[1].from("registros_financeiros").select("id").eq("id", privateFinanceId));
-  if (demandLeak.length !== 0 || financeLeak.length !== 0) {
-    throw new Error("Falha de isolamento em demandas ou financeiro.");
-  }
-
-  await assertNoError("criar loja compartilhada", await clients[0].from("lojas").insert({
-    id: sharedStoreId,
-    user_id: userA.user.id,
-    nome: token,
-    rede: "Teste automatizado",
-    endereco: "Rua do teste, 1",
-    responsavel: "Teste",
-  }));
-  const sharedForB = await assertNoError("ler loja compartilhada pela conta B", await clients[1].from("lojas").select("id").eq("id", sharedStoreId));
-  if (sharedForB.length !== 1) throw new Error("Falha de compartilhamento: a segunda conta não viu a loja.");
-
-  console.log("OK: dados privados isolados e cadastros de lojas compartilhados entre duas contas.");
-} finally {
-  await clients[0].from("lojas").delete().eq("id", sharedStoreId);
-  await clients[0].from("demandas").delete().eq("id", privateDemandId);
-  await clients[0].from("registros_financeiros").delete().eq("id", privateFinanceId);
-  await clients[0].from("diaristas").delete().eq("id", privateIds[0]);
-  await clients[1].from("diaristas").delete().eq("id", privateIds[1]);
-  await Promise.all(clients.map((client) => client.auth.signOut()));
+async function expectInvisible(label, client, table, id) {
+  const rows = await requireSuccess(label, await client.from(table).select("id").eq("id", id));
+  if (rows.length !== 0) throw new Error(`${label}: registro privado ficou visivel.`);
 }
+
+async function expectVisible(label, client, table, id) {
+  const rows = await requireSuccess(label, await client.from(table).select("id").eq("id", id));
+  if (rows.length !== 1) throw new Error(`${label}: registro esperado nao ficou visivel.`);
+}
+
+try {
+  await requireSuccess(
+    "criar diarista A",
+    await clients.supervisorA.from("diaristas").insert({
+      id: ids.diaristaA,
+      user_id: users.supervisorA.id,
+      nome: `${token}-A`,
+    }),
+  );
+  await requireSuccess(
+    "criar diarista B",
+    await clients.supervisorB.from("diaristas").insert({
+      id: ids.diaristaB,
+      user_id: users.supervisorB.id,
+      nome: `${token}-B`,
+    }),
+  );
+
+  await expectVisible("A le o proprio diarista", clients.supervisorA, "diaristas", ids.diaristaA);
+  await expectInvisible("A nao le diarista B", clients.supervisorA, "diaristas", ids.diaristaB);
+  await expectInvisible("B nao le diarista A", clients.supervisorB, "diaristas", ids.diaristaA);
+  await expectVisible("admin le diarista A", clients.admin, "diaristas", ids.diaristaA);
+  await expectVisible("admin le diarista B", clients.admin, "diaristas", ids.diaristaB);
+
+  const today = new Date().toISOString().slice(0, 10);
+  await requireSuccess(
+    "criar demanda privada A",
+    await clients.supervisorA.from("demandas").insert({
+      id: ids.demandaA,
+      user_id: users.supervisorA.id,
+      data: today,
+      codigo: token,
+    }),
+  );
+  await requireSuccess(
+    "criar financeiro privado A",
+    await clients.supervisorA.from("registros_financeiros").insert({
+      id: ids.financeiroA,
+      user_id: users.supervisorA.id,
+      data: today,
+      diarista_nome: token,
+    }),
+  );
+
+  await expectInvisible("B nao le demanda A", clients.supervisorB, "demandas", ids.demandaA);
+  await expectInvisible("B nao le financeiro A", clients.supervisorB, "registros_financeiros", ids.financeiroA);
+  await expectVisible("admin le demanda A", clients.admin, "demandas", ids.demandaA);
+  await expectVisible("admin le financeiro A", clients.admin, "registros_financeiros", ids.financeiroA);
+
+  await requireSuccess(
+    "criar loja compartilhada",
+    await clients.supervisorA.from("lojas").insert({
+      id: ids.loja,
+      user_id: users.supervisorA.id,
+      nome: token,
+      rede: "Teste automatizado",
+      endereco: "Rua de homologacao, 1",
+      responsavel: "Teste",
+    }),
+  );
+  await expectVisible("B le loja compartilhada", clients.supervisorB, "lojas", ids.loja);
+  await expectVisible("admin le loja compartilhada", clients.admin, "lojas", ids.loja);
+
+  const forbiddenUpdate = await clients.supervisorB
+    .from("lojas")
+    .update({ bairro: "ALTERACAO-INDEVIDA" })
+    .eq("id", ids.loja)
+    .select("id");
+  if (!forbiddenUpdate.error && forbiddenUpdate.data?.length) {
+    throw new Error("Supervisor B conseguiu editar uma loja criada pelo Supervisor A.");
+  }
+
+  await requireSuccess(
+    "admin edita loja compartilhada",
+    await clients.admin
+      .from("lojas")
+      .update({ bairro: "Homologacao" })
+      .eq("id", ids.loja)
+      .select("id"),
+  );
+
+  const forbiddenTemplate = await clients.supervisorB.from("copy_templates").insert({
+    id: ids.templateAttempt,
+    user_id: users.supervisorB.id,
+  });
+  if (!forbiddenTemplate.error) {
+    throw new Error("Supervisor conseguiu criar um modelo global de texto.");
+  }
+
+  console.log("OK: administrador, isolamento privado e catalogos compartilhados foram validados.");
+} finally {
+  await clients.admin.from("copy_templates").delete().eq("id", ids.templateAttempt);
+  await clients.admin.from("lojas").delete().eq("id", ids.loja);
+  await clients.supervisorA.from("demandas").delete().eq("id", ids.demandaA);
+  await clients.supervisorA.from("registros_financeiros").delete().eq("id", ids.financeiroA);
+  await clients.supervisorA.from("diaristas").delete().eq("id", ids.diaristaA);
+  await clients.supervisorB.from("diaristas").delete().eq("id", ids.diaristaB);
+  await Promise.all(Object.values(clients).map((client) => client.auth.signOut()));
+}
+

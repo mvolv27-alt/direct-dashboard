@@ -77,23 +77,5 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.lojas;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.setor_valores;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.rede_valores;
 
--- Permite que os novos canais Realtime sejam consumidos pelos membros da equipe
-DROP POLICY IF EXISTS "authenticated can read team realtime topics" ON realtime.messages;
-CREATE POLICY "authenticated can read team realtime topics"
-ON realtime.messages
-FOR SELECT
-TO authenticated
-USING (
-  realtime.topic() IN ('diaristas','demandas','setores_custom','registros_financeiros','lojas','setor_valores','rede_valores')
-  OR realtime.topic() LIKE 'realtime:public:%'
-);
-
-DROP POLICY IF EXISTS "authenticated can write team realtime topics" ON realtime.messages;
-CREATE POLICY "authenticated can write team realtime topics"
-ON realtime.messages
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  realtime.topic() IN ('diaristas','demandas','setores_custom','registros_financeiros','lojas','setor_valores','rede_valores')
-  OR realtime.topic() LIKE 'realtime:public:%'
-);
+-- Nao altere realtime.messages em projetos hospedados. As assinaturas de
+-- Postgres Changes sao autorizadas pelas tabelas publicadas e suas politicas.
