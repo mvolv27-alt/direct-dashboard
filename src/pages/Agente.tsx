@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Bot, CalendarDays, CheckCircle2, ClipboardPaste, Wand2 } from "lucide-react";
+import { Bot, CalendarDays, CheckCircle2, ClipboardPaste, LoaderCircle, MapPin, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import {
   upsertSetorValor,
 } from "@/hooks/useConfig";
 import type { Demanda } from "@/types";
+import { buscarEnderecoLoja, type SugestaoEndereco } from "@/lib/addressLookup";
 import {
   analisarSolicitacao,
   codigoDemanda,
@@ -84,21 +85,75 @@ export default function AgentePage() {
   const [plano, setPlano] = useState<AgenteSolicitacaoPlano | null>(null);
   const [datasDigitadas, setDatasDigitadas] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [analisando, setAnalisando] = useState(false);
+  const [buscandoEndereco, setBuscandoEndereco] = useState(false);
+  const [mapaUrl, setMapaUrl] = useState("");
 
   const datasRevisadas = useMemo(
     () => parseDatasDigitadas(datasDigitadas),
     [datasDigitadas],
   );
 
-  function analisar() {
+  function aplicarEndereco(sugestao: SugestaoEndereco) {
+    setPlano((prev) =>
+      prev
+        ? {
+            ...prev,
+            campos: {
+              ...prev.campos,
+              endereco: sugestao.endereco,
+              bairro: sugestao.bairro || prev.campos.bairro,
+              cidade: sugestao.cidade || prev.campos.cidade,
+              uf: sugestao.uf || prev.campos.uf,
+            },
+          }
+        : prev,
+    );
+    setMapaUrl(sugestao.mapaUrl);
+  }
+
+  async function procurarEndereco(campos: AgenteSolicitacaoPlano["campos"]) {
+    setBuscandoEndereco(true);
+    try {
+      const sugestao = await buscarEnderecoLoja({
+        rede: campos.rede,
+        loja: campos.loja,
+        bairro: campos.bairro,
+        cidade: campos.cidade,
+        uf: campos.uf,
+      });
+      if (!sugestao) {
+        toast.info("Endereço não localizado no mapa", {
+          description: "Revise o nome da unidade ou preencha o endereço manualmente.",
+        });
+        return;
+      }
+      aplicarEndereco(sugestao);
+      toast.success("Endereço sugerido pelo mapa");
+    } catch (error) {
+      toast.error("Não foi possível consultar o mapa", {
+        description: error instanceof Error ? error.message : "Preencha o endereço manualmente.",
+      });
+    } finally {
+      setBuscandoEndereco(false);
+    }
+  }
+
+  async function analisar() {
     if (!texto.trim()) {
       toast.error("Cole a solicitação antes de analisar");
       return;
     }
+    setAnalisando(true);
+    setMapaUrl("");
     const resultado = analisarSolicitacao(texto, { lojas, setores, redes });
     setPlano(resultado);
     setDatasDigitadas(resultado.campos.datas.map(formatDate).join(", "));
     toast.success("Solicitação analisada");
+    if (!resultado.encontrados.loja && resultado.campos.loja) {
+      await procurarEndereco(resultado.campos);
+    }
+    setAnalisando(false);
   }
 
   function updateCampo<K extends keyof AgenteSolicitacaoPlano["campos"]>(
@@ -112,6 +167,28 @@ export default function AgentePage() {
             campos: {
               ...prev.campos,
               [campo]: valor,
+            },
+          }
+        : prev,
+    );
+  }
+
+  function updateRede(valor: string) {
+    const encontrada = redes.find(
+      (rede) => normalizarBusca(rede.rede) === normalizarBusca(valor),
+    );
+    setPlano((prev) =>
+      prev
+        ? {
+            ...prev,
+            campos: {
+              ...prev.campos,
+              rede: encontrada?.rede || valor,
+              valorRecebidoRede: encontrada?.valor_recebido || (prev.encontrados.rede ? 0 : prev.campos.valorRecebidoRede),
+            },
+            encontrados: {
+              ...prev.encontrados,
+              rede: Boolean(encontrada),
             },
           }
         : prev,
@@ -220,6 +297,7 @@ export default function AgentePage() {
       setPlano(null);
       setTexto("");
       setDatasDigitadas("");
+      setMapaUrl("");
     } catch (error) {
       toast.error("Não foi possível cadastrar", {
         description: error instanceof Error ? error.message : "Tente novamente.",
@@ -263,9 +341,9 @@ export default function AgentePage() {
             className="min-h-[220px] resize-y font-mono text-sm leading-relaxed sm:min-h-[360px]"
             placeholder="Cole a solicitação aqui..."
           />
-          <Button type="button" className="mt-4 w-full" onClick={analisar}>
-            <Wand2 size={16} />
-            Analisar solicitação
+          <Button type="button" className="mt-4 w-full" onClick={() => void analisar()} disabled={analisando}>
+            {analisando ? <LoaderCircle className="animate-spin" size={16} /> : <Wand2 size={16} />}
+            {analisando ? "Analisando..." : "Analisar solicitação"}
           </Button>
         </section>
 
@@ -311,14 +389,49 @@ export default function AgentePage() {
               )}
 
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Rede" value={plano.campos.rede} onChange={(v) => updateCampo("rede", v)} />
+                <Field label="Rede" value={plano.campos.rede} onChange={updateRede} />
                 <Field label="Loja" value={plano.campos.loja} onChange={(v) => updateCampo("loja", v)} />
                 <Field label="Bairro" value={plano.campos.bairro} onChange={(v) => updateCampo("bairro", v)} />
                 <Field label="Responsável" value={plano.campos.responsavel} onChange={(v) => updateCampo("responsavel", v)} />
-                <Field className="md:col-span-2" label="Endereço" value={plano.campos.endereco} onChange={(v) => updateCampo("endereco", v)} />
+                <div className="space-y-1.5 md:col-span-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Endereço</Label>
+                    {!plano.encontrados.loja && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1.5 px-2 text-xs"
+                        disabled={buscandoEndereco}
+                        onClick={() => void procurarEndereco(plano.campos)}
+                      >
+                        {buscandoEndereco ? <LoaderCircle className="animate-spin" size={13} /> : <MapPin size={13} />}
+                        {buscandoEndereco ? "Buscando..." : "Buscar no mapa"}
+                      </Button>
+                    )}
+                  </div>
+                  <Input value={plano.campos.endereco} onChange={(event) => updateCampo("endereco", event.target.value)} />
+                  {mapaUrl && (
+                    <a
+                      href={mapaUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <MapPin size={12} />
+                      Conferir no mapa · © OpenStreetMap
+                    </a>
+                  )}
+                </div>
                 <Field label="Setor/Função" value={plano.campos.setor} onChange={(v) => updateCampo("setor", v)} />
                 <NumberField label="Valor da diária" value={plano.campos.valorDiaria} onChange={(v) => updateCampo("valorDiaria", v)} />
-                <NumberField label="Valor recebido da rede" value={plano.campos.valorRecebidoRede} onChange={(v) => updateCampo("valorRecebidoRede", v)} />
+                <NumberField
+                  label="Valor recebido da rede"
+                  value={plano.campos.valorRecebidoRede}
+                  onChange={(v) => updateCampo("valorRecebidoRede", v)}
+                  disabled={plano.encontrados.rede}
+                  hint={plano.encontrados.rede ? "Puxado das configurações da rede." : undefined}
+                />
                 <Field label="Entrada" value={plano.campos.entrada} onChange={(v) => updateCampo("entrada", v)} />
                 <Field label="Saída" value={plano.campos.saida} onChange={(v) => updateCampo("saida", v)} />
                 <NumberField label="Vagas por dia" value={plano.campos.vagas} onChange={(v) => updateCampo("vagas", v)} />
@@ -383,10 +496,14 @@ function NumberField({
   label,
   value,
   onChange,
+  disabled,
+  hint,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <div>
@@ -396,8 +513,10 @@ function NumberField({
         min={0}
         step="0.01"
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value) || 0)}
       />
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

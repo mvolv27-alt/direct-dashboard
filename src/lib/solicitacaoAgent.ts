@@ -40,6 +40,8 @@ const aliasesSetor: Record<string, string> = {
   acougue: "Balconista de Açougue",
 };
 
+const VALOR_DIARIA_PADRAO = 90;
+
 export function uid() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -83,7 +85,29 @@ function parseHorario(valor: string) {
   };
 }
 
-function inferirRedeELoja(lojaTexto: string) {
+function inferirRedeELoja(lojaTexto: string, redes: RedeValor[]) {
+  const alvo = normalizarBusca(lojaTexto);
+  const redeCadastrada = [...redes]
+    .sort((a, b) => normalizarBusca(b.rede).length - normalizarBusca(a.rede).length)
+    .find((item) => {
+      const redeNormalizada = normalizarBusca(item.rede);
+      return alvo === redeNormalizada || alvo.startsWith(`${redeNormalizada} `);
+    });
+
+  if (redeCadastrada) {
+    const redeNormalizada = normalizarBusca(redeCadastrada.rede);
+    const unidade = alvo
+      .slice(redeNormalizada.length)
+      .trim()
+      .replace(/^(?:loja|unidade|filial)\s+/, "");
+    const bairro = titleCase(unidade);
+    return {
+      rede: redeCadastrada.rede,
+      loja: bairro ? `${redeCadastrada.rede} - ${bairro}` : redeCadastrada.rede,
+      bairro,
+    };
+  }
+
   const palavras = lojaTexto.split(/\s+/).filter(Boolean);
   if (palavras.length <= 2) {
     const nome = titleCase(lojaTexto);
@@ -98,10 +122,10 @@ function inferirRedeELoja(lojaTexto: string) {
   };
 }
 
-function resolverLoja(lojaTexto: string, lojas: Loja[]) {
+function resolverLoja(lojaTexto: string, lojas: Loja[], redes: RedeValor[]) {
   const alvo = normalizarBusca(lojaTexto);
   if (!alvo) {
-    const inferida = inferirRedeELoja("");
+    const inferida = inferirRedeELoja("", redes);
     return {
       existente: false,
       loja: {
@@ -118,12 +142,15 @@ function resolverLoja(lojaTexto: string, lojas: Loja[]) {
     };
   }
   const encontrada = lojas.find((loja) => {
-    const completo = normalizarBusca(`${loja.rede} ${loja.nome} ${loja.bairro}`);
-    return completo.includes(alvo) || alvo.includes(normalizarBusca(loja.nome));
+    const nome = normalizarBusca(loja.nome);
+    const rede = normalizarBusca(loja.rede);
+    const redeBairro = normalizarBusca(`${loja.rede} ${loja.bairro}`);
+    if (alvo === rede) return false;
+    return alvo === nome || alvo === redeBairro || alvo.includes(nome) || redeBairro.includes(alvo);
   });
   if (encontrada) return { existente: true, loja: encontrada };
 
-  const inferida = inferirRedeELoja(lojaTexto);
+  const inferida = inferirRedeELoja(lojaTexto, redes);
   return {
     existente: false,
     loja: {
@@ -148,7 +175,7 @@ function resolverSetor(funcao: string, observacao: string, setores: SetorValor[]
   return {
     existente: Boolean(encontrado),
     setor: encontrado?.setor || nome,
-    valorDiaria: encontrado?.valor_min || 0,
+    valorDiaria: VALOR_DIARIA_PADRAO,
   };
 }
 
@@ -213,7 +240,7 @@ export function analisarSolicitacao(
   const quantidadeTexto = extrairCampo(texto, ["Quantidade de dias", "Qtd dias", "Dias"]);
   const observacao = extrairCampo(texto, ["observação", "observacao", "obs"]);
 
-  const loja = resolverLoja(lojaTexto, contexto.lojas);
+  const loja = resolverLoja(lojaTexto, contexto.lojas, contexto.redes);
   const setor = resolverSetor(funcao, observacao, contexto.setores);
   const rede = resolverRede(loja.loja.rede, contexto.redes);
   const horario = parseHorario(horarioTexto);
