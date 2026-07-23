@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { analisarSolicitacao } from "../src/lib/solicitacaoAgent";
 import { buscarEnderecoLoja } from "../src/lib/addressLookup";
+import {
+  analisarCadastroDiarista,
+  detectarTipoTextoAgente,
+} from "../src/lib/diaristaAgent";
 import type { Loja, RedeValor, SetorValor } from "../src/hooks/useConfig";
 
 const lojas: Loja[] = [
@@ -131,4 +135,87 @@ assert.equal(endereco?.bairro, "Dionísio Torres");
 assert.equal(endereco?.cidade, "Fortaleza");
 assert.equal(endereco?.uf, "CE");
 
-console.log("Agente: 5 cenários validados com sucesso.");
+const templateDiarista = `Dados para Cadastro de Operadores
+
+Nome Completo:
+CPF:
+Estado:
+Cidade:
+Bairro:
+Rua/Nº:
+CEP:`;
+assert.equal(detectarTipoTextoAgente(templateDiarista), "diarista");
+const templatePlano = analisarCadastroDiarista(templateDiarista, []);
+assert.equal(templatePlano.campos.nome, "");
+assert.equal(templatePlano.campos.cpf, "");
+assert.deepEqual(templatePlano.campos.setores, ["Operador de caixa"]);
+
+const cadastroLivre = analisarCadastroDiarista(
+  `Vitor Hugo Lima da Silva
+626.282.413.82
+Fortaleza
+José Walter
+Rua 45, 1010A
+60750590
+85 8480-5216`,
+  [],
+);
+assert.equal(cadastroLivre.campos.nome, "Vitor Hugo Lima da Silva");
+assert.equal(cadastroLivre.campos.cpf, "626.282.413-82");
+assert.equal(cadastroLivre.campos.estado, "Ceará");
+assert.equal(cadastroLivre.campos.cidade, "Fortaleza");
+assert.equal(cadastroLivre.campos.bairro, "José Walter");
+assert.equal(cadastroLivre.campos.endereco, "Rua 45, 1010A");
+assert.equal(cadastroLivre.campos.cep, "60750-590");
+assert.equal(cadastroLivre.campos.telefone, "(85) 8480-5216");
+
+const cadastroRotulado = analisarCadastroDiarista(
+  `*Dados para Cadastro de Operadores*
+
+Nome Completo:thaina gama de sousa
+CPF:604.870.413.56
+Estado:ceara
+Cidade:fortaleza
+Bairro:centro
+Rua/Nº:rua 25 de marco 375
+CEP:60060120`,
+  [],
+);
+assert.equal(cadastroRotulado.campos.nome, "Thaina Gama de Sousa");
+assert.equal(cadastroRotulado.campos.cpf, "604.870.413-56");
+assert.equal(cadastroRotulado.campos.telefone, "");
+assert.equal(cadastroRotulado.campos.estado, "Ceará");
+assert.equal(cadastroRotulado.campos.cidade, "Fortaleza");
+assert.equal(cadastroRotulado.campos.bairro, "Centro");
+assert.equal(cadastroRotulado.campos.endereco, "rua 25 de marco 375");
+assert.equal(cadastroRotulado.campos.cep, "60060-120");
+
+const existenteDiarista = analisarCadastroDiarista(
+  `Dados para Cadastro de Operadores
+Nome Completo: Vitor Hugo Lima da Silva
+CPF: 626.282.413-82
+Cidade: Fortaleza`,
+  [
+    {
+      id: "diarista-1",
+      nome: "Vitor Hugo Lima da Silva",
+      cpf: "626.282.413-82",
+      telefone: "(85) 99999-0000",
+      estado: "Ceará",
+      cidade: "Fortaleza",
+      bairro: "José Walter",
+      endereco: "Rua Antiga, 10",
+      cep: "60750-000",
+      setorExperiencia: ["Repositor de Mercearia"],
+      presencas: 8,
+      faltas: 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    },
+  ],
+);
+assert.equal(existenteDiarista.existente?.id, "diarista-1");
+assert.equal(existenteDiarista.campos.telefone, "(85) 99999-0000");
+assert.equal(existenteDiarista.campos.bairro, "José Walter");
+assert.deepEqual(existenteDiarista.campos.setores, ["Repositor de Mercearia", "Operador de caixa"]);
+
+console.log("Agente: 9 cenários validados com sucesso.");
