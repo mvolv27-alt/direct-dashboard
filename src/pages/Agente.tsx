@@ -80,7 +80,7 @@ export default function AgentePage() {
   const { rows: lojas } = useLojas();
   const { rows: setores } = useSetorValores();
   const { rows: redes } = useRedeValores();
-  const [texto, setTexto] = useState(exemplo);
+  const [texto, setTexto] = useState("");
   const [plano, setPlano] = useState<AgenteSolicitacaoPlano | null>(null);
   const [datasDigitadas, setDatasDigitadas] = useState("");
   const [salvando, setSalvando] = useState(false);
