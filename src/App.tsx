@@ -13,6 +13,7 @@ const Diaristas = lazy(() => import("@/pages/Diaristas"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Financeiro = lazy(() => import("@/pages/Financeiro"));
 const Demandas = lazy(() => import("@/pages/Demandas"));
+const Agente = lazy(() => import("@/pages/Agente"));
 const Auth = lazy(() => import("@/pages/Auth"));
 const Configuracoes = lazy(() => import("@/pages/Configuracoes"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -38,6 +39,7 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+                <Route path="/agente" element={<Protected><Agente /></Protected>} />
                 <Route path="/demandas" element={<Protected><Demandas /></Protected>} />
                 <Route path="/diaristas" element={<Protected><Diaristas /></Protected>} />
                 <Route path="/financeiro" element={<Protected><Financeiro /></Protected>} />

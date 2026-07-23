@@ -11,6 +11,7 @@ import {
   CloudOff,
   RefreshCw,
   LayoutDashboard,
+  Bot,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -36,6 +37,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const navItems = [
   { to: "/dashboard", label: "Central", icon: LayoutDashboard },
+  { to: "/agente", label: "Agente", icon: Bot },
   { to: "/demandas", label: "Demandas", icon: ClipboardList },
   { to: "/diaristas", label: "Diaristas", icon: Users },
   { to: "/financeiro", label: "Financeiro", icon: DollarSign },
@@ -236,14 +238,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/92 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden">
-          <div className="grid grid-cols-5 gap-1">
+          <div className="grid grid-cols-6 gap-0.5">
             {navItems.map((item) => {
               const active = location.pathname === item.to;
               return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-[10px] font-semibold transition-colors ${
+                  className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 py-2 text-[9px] font-semibold transition-colors ${
                     active
                       ? "bg-primary text-primary-foreground shadow-[0_8px_20px_-12px_hsl(var(--primary)/0.8)]"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"

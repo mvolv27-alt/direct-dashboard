@@ -47,6 +47,13 @@ const CACHE_PREFIX = "direct.cache::";
 const OUTBOX_KEY = "direct.outbox::v1";
 const DATA_EVENT = "direct:data-changed";
 const STATUS_EVENT = "direct:sync-status";
+const BACKGROUND_REFRESH_MS = 5_000;
+const SYNC_TABLES: TableName[] = [
+  "diaristas",
+  "demandas",
+  "registros_financeiros",
+  "setores_custom",
+];
 
 // ------------------------------------------------------------
 //  Cache helpers
@@ -263,10 +270,6 @@ function enqueue(op: OutboxOp) {
   writeOutbox(all);
 }
 
-function localCacheHasRows(table: TableName) {
-  return readCache<unknown>(table).length > 0;
-}
-
 function upsertPayload(table: TableName, payload: DbRow): CloudResult {
   const ownedPayload = { ...payload, user_id: requireActiveUserId() };
   if (table === "setores_custom") {
@@ -322,23 +325,26 @@ export const getCachedSetores = (): string[] => readCache<string>("setores_custo
 async function tryCloud(fn: () => CloudResult, fallback: () => void) {
   if (!navigator.onLine) {
     fallback();
-    return;
+    return false;
   }
   try {
     const { error } = await fn();
     if (error) throw error;
+    return true;
   } catch {
     fallback();
+    return false;
   }
 }
 
 async function cloudInsert<T extends { id: string }>(table: TableName, row: T) {
   upsertInCache(table, row);
   const payload = mappers[table].toRow(row);
-  await tryCloud(
+  const saved = await tryCloud(
     () => upsertPayload(table, payload),
     () => enqueue({ table, op: "insert", payload }),
   );
+  if (saved) void refreshTablesFromCloud([table]);
 }
 async function cloudUpdate<T extends { id: string }>(table: TableName, row: T) {
   upsertInCache(table, row);
@@ -347,7 +353,7 @@ async function cloudUpdate<T extends { id: string }>(table: TableName, row: T) {
     id: row.id,
     user_id: requireActiveUserId(),
   } as DbRow & { id: string };
-  await tryCloud(
+  const saved = await tryCloud(
     () =>
       tableQuery(table)
         .update(payload as never)
@@ -355,10 +361,11 @@ async function cloudUpdate<T extends { id: string }>(table: TableName, row: T) {
         .eq("user_id", requireActiveUserId()) as CloudResult,
     () => enqueue({ table, op: "update", payload }),
   );
+  if (saved) void refreshTablesFromCloud([table]);
 }
 async function cloudDelete(table: TableName, id: string) {
   removeFromCache(table, id);
-  await tryCloud(
+  const saved = await tryCloud(
     () =>
       tableQuery(table)
         .delete()
@@ -366,6 +373,7 @@ async function cloudDelete(table: TableName, id: string) {
         .eq("user_id", requireActiveUserId()) as CloudResult,
     () => enqueue({ table, op: "delete", id }),
   );
+  if (saved) void refreshTablesFromCloud([table]);
 }
 
 // Strongly-typed wrappers used by storage.ts
@@ -390,7 +398,7 @@ export async function upsertSetorCustom(nome: string) {
     all.push(nome);
     writeCache("setores_custom", all);
   }
-  await tryCloud(
+  const saved = await tryCloud(
     () =>
       supabase
         .from("setores_custom")
@@ -405,6 +413,7 @@ export async function upsertSetorCustom(nome: string) {
         payload: { nome, user_id: requireActiveUserId() },
       }),
   );
+  if (saved) void refreshTablesFromCloud(["setores_custom"]);
 }
 
 // ------------------------------------------------------------
@@ -478,6 +487,8 @@ export function useLiveData<T>(getter: () => T, tables: TableName[]): T {
 // ------------------------------------------------------------
 let startedUserId = "";
 let realtimeChannels: ReturnType<typeof subscribeRealtime>[] = [];
+let backgroundRefreshTimer: number | null = null;
+let refreshInFlight = false;
 
 async function fetchAll(table: TableName) {
   const userId = requireActiveUserId();
@@ -488,36 +499,31 @@ async function fetchAll(table: TableName) {
   if (error) throw error;
   if (!data) return;
   const rows = (data as DbRow[]).map(mappers[table].fromRow);
-  if (rows.length === 0 && localCacheHasRows(table)) {
-    emitStatus({ lastSyncedAt: Date.now() });
-    return;
-  }
   writeCache(table, rows);
   emitStatus({ lastSyncedAt: Date.now() });
 }
 
-async function uploadCurrentCacheToCloud(tables: TableName[]) {
-  if (!navigator.onLine) return;
-  for (const table of tables) {
-    const rows = readCache<unknown>(table);
-    for (const row of rows) {
-      const payload = mappers[table].toRow(row);
-      if (table !== "setores_custom" && !payload.id) continue;
-      try {
-        const { error } = await upsertPayload(table, payload);
-        if (error) throw error;
-      } catch {
-        enqueue({ table, op: "insert", payload });
-      }
-    }
-  }
+async function refreshTablesFromCloud(tables: TableName[] = SYNC_TABLES, showSync = false) {
+  if (!navigator.onLine || refreshInFlight) return [];
+  refreshInFlight = true;
+  if (showSync) emitStatus({ syncing: true });
+  const results = await Promise.allSettled(tables.map(fetchAll));
+  refreshInFlight = false;
+  emitStatus({ lastSyncedAt: Date.now(), syncing: false });
+  return results;
+}
+
+export async function forceCloudSync(tables: TableName[] = SYNC_TABLES) {
+  emitStatus({ syncing: true });
+  await flushOutbox();
+  return refreshTablesFromCloud(tables, true);
 }
 
 function subscribeRealtime(table: TableName) {
   const userId = requireActiveUserId();
   const realtimeFilter = SHARED_TABLES.has(table) ? {} : { filter: `user_id=eq.${userId}` };
   const channel = supabase
-    .channel(`direct:${userId}:${table}`)
+    .channel(`direct:${userId}:${table}:${crypto.randomUUID()}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table, ...realtimeFilter },
@@ -547,23 +553,62 @@ function subscribeRealtime(table: TableName) {
         emitStatus({ lastSyncedAt: Date.now() });
       },
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        void refreshTablesFromCloud([table]);
+      }
+    });
   return channel;
 }
 
-export async function startSync(userId: string) {
-  if (!userId || startedUserId === userId) return;
+function stopRealtimeSync() {
   realtimeChannels.forEach((channel) => void supabase.removeChannel(channel));
   realtimeChannels = [];
+  if (backgroundRefreshTimer) {
+    window.clearInterval(backgroundRefreshTimer);
+    backgroundRefreshTimer = null;
+  }
+  window.removeEventListener("online", handleOnline);
+  window.removeEventListener("offline", handleOffline);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+}
+
+function handleOnline() {
+  emitStatus();
+  void flushOutbox().then(() => refreshTablesFromCloud(SYNC_TABLES, true));
+}
+
+function handleOffline() {
+  emitStatus();
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === "visible") {
+    void refreshTablesFromCloud(SYNC_TABLES, true);
+  }
+}
+
+function startBackgroundRefresh() {
+  if (backgroundRefreshTimer) window.clearInterval(backgroundRefreshTimer);
+  backgroundRefreshTimer = window.setInterval(() => {
+    void flushOutbox().then(() => refreshTablesFromCloud());
+  }, BACKGROUND_REFRESH_MS);
+  window.addEventListener("online", handleOnline);
+  window.addEventListener("offline", handleOffline);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+}
+
+export async function startSync(userId: string) {
+  if (!userId) return;
+  if (startedUserId === userId) {
+    void refreshTablesFromCloud(SYNC_TABLES, true);
+    return;
+  }
+  stopRealtimeSync();
   startedUserId = userId;
   setActiveUserScope(userId);
   emitStatus({ syncing: true });
-  const tables: TableName[] = [
-    "diaristas",
-    "demandas",
-    "registros_financeiros",
-    "setores_custom",
-  ];
+  const tables = SYNC_TABLES;
 
   adoptLegacyStorage([
     ...tables.map((table) => CACHE_PREFIX + table),
@@ -574,21 +619,14 @@ export async function startSync(userId: string) {
     Object.values(LEGACY).forEach((key) => localStorage.removeItem(key));
   }
 
-  window.addEventListener("online", () => {
-    emitStatus();
-    flushOutbox();
-  });
-  window.addEventListener("offline", () => emitStatus());
-
-  // First send local cached rows and queued writes so data created in local/offline mode reaches the cloud.
-  await uploadCurrentCacheToCloud(tables);
+  // First drain queued writes, then always trust the cloud as the current source.
   await flushOutbox();
-  // Then hydrate from cloud with the latest shared data.
-  const fetchResults = await Promise.allSettled(tables.map(fetchAll));
+  const fetchResults = await refreshTablesFromCloud(tables, true);
   // Retry anything that could not be sent on the first pass.
   await flushOutbox();
   // realtime subscriptions
   realtimeChannels = tables.map(subscribeRealtime);
+  startBackgroundRefresh();
   emitStatus({ lastSyncedAt: Date.now(), syncing: false });
   const failedFetches = fetchResults.filter(
     (result): result is PromiseRejectedResult => result.status === "rejected",

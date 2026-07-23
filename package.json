@@ -8,7 +8,9 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:agent": "esbuild scripts/test-agent-core.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/direct-agent-test.mjs && node node_modules/.cache/direct-agent-test.mjs",
+    "test:isolation": "node scripts/test-two-accounts.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
