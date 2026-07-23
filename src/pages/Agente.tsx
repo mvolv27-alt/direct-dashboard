@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Bot, CalendarDays, CheckCircle2, ClipboardPaste, LoaderCircle, MapPin, Wand2 } from "lucide-react";
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronsUpDown, ClipboardPaste, LoaderCircle, MapPin, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,12 +8,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   getDiaristas,
+  getSetoresCustom,
   saveDemanda,
   saveDiarista,
   saveSetorCustom,
   updateDiarista,
 } from "@/lib/storage";
 import { useLiveData } from "@/lib/sync";
+import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   useLojas,
   useRedeValores,
@@ -94,6 +105,7 @@ function horarioValido(valor: string) {
 
 export default function AgentePage() {
   const diaristas = useLiveData(getDiaristas, ["diaristas"]);
+  const setoresCustom = useLiveData(getSetoresCustom, ["setores_custom"]);
   const { rows: lojas } = useLojas();
   const { rows: setores } = useSetorValores();
   const { rows: redes } = useRedeValores();
@@ -109,6 +121,17 @@ export default function AgentePage() {
   const datasRevisadas = useMemo(
     () => parseDatasDigitadas(datasDigitadas),
     [datasDigitadas],
+  );
+  const setoresDisponiveis = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          [...setores.map((item) => item.setor), ...setoresCustom]
+            .filter(Boolean)
+            .map((setor) => [normalizarBusca(setor), setor]),
+        ).values(),
+      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [setores, setoresCustom],
   );
 
   function aplicarEndereco(sugestao: SugestaoEndereco) {
@@ -468,11 +491,11 @@ export default function AgentePage() {
                 <Field label="Bairro" value={cadastroDiarista.campos.bairro} onChange={(v) => updateCadastroDiarista("bairro", v)} />
                 <Field label="CEP" value={cadastroDiarista.campos.cep} onChange={(v) => updateCadastroDiarista("cep", formatarCEP(v))} />
                 <Field className="md:col-span-2" label="Rua/Nº" value={cadastroDiarista.campos.endereco} onChange={(v) => updateCadastroDiarista("endereco", v)} />
-                <Field
+                <SetorMultiSelect
                   className="md:col-span-2"
-                  label="Setores de experiência"
-                  value={cadastroDiarista.campos.setores.join(", ")}
-                  onChange={(v) => updateCadastroDiarista("setores", v.split(",").map((item) => item.trim()).filter(Boolean))}
+                  options={setoresDisponiveis}
+                  value={cadastroDiarista.campos.setores}
+                  onChange={(value) => updateCadastroDiarista("setores", value)}
                 />
               </div>
 
@@ -650,6 +673,81 @@ function NumberField({
         onChange={(event) => onChange(Number(event.target.value) || 0)}
       />
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+function SetorMultiSelect({
+  options,
+  value,
+  onChange,
+  className,
+}: {
+  options: string[];
+  value: string[];
+  onChange: (value: string[]) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  function toggle(option: string) {
+    const normalized = normalizarBusca(option);
+    const selected = value.some((item) => normalizarBusca(item) === normalized);
+    onChange(
+      selected
+        ? value.filter((item) => normalizarBusca(item) !== normalized)
+        : [...value, option],
+    );
+  }
+
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <Label>Setores de experiência</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="min-h-10 w-full justify-between gap-2 whitespace-normal px-3 py-2 text-left font-normal"
+          >
+            <span className={cn("line-clamp-2", value.length === 0 && "text-muted-foreground")}>
+              {value.length > 0 ? value.join(", ") : "Selecione um ou mais setores"}
+            </span>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          side="bottom"
+          collisionPadding={12}
+          className="w-[var(--radix-popover-trigger-width)] p-0"
+        >
+          <Command>
+            <CommandInput placeholder="Buscar setor..." />
+            <CommandList className="max-h-64">
+              <CommandEmpty>Nenhum setor encontrado.</CommandEmpty>
+              <CommandGroup>
+                {options.map((option) => {
+                  const selected = value.some(
+                    (item) => normalizarBusca(item) === normalizarBusca(option),
+                  );
+                  return (
+                    <CommandItem key={option} value={option} onSelect={() => toggle(option)}>
+                      <Check className={cn("mr-2 h-4 w-4", selected ? "opacity-100" : "opacity-0")} />
+                      <span>{option}</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      <p className="text-xs text-muted-foreground">
+        {value.length} setor(es) selecionado(s).
+      </p>
     </div>
   );
 }
