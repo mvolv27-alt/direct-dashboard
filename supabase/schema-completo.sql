@@ -96,6 +96,10 @@ CREATE TABLE public.diaristas (
   cpf TEXT NOT NULL DEFAULT '',
   telefone TEXT NOT NULL DEFAULT '',
   bairro TEXT NOT NULL DEFAULT '',
+  estado TEXT NOT NULL DEFAULT '',
+  cidade TEXT NOT NULL DEFAULT '',
+  endereco TEXT NOT NULL DEFAULT '',
+  cep TEXT NOT NULL DEFAULT '',
   setor_experiencia TEXT[] NOT NULL DEFAULT '{}',
   presencas INTEGER NOT NULL DEFAULT 0,
   faltas INTEGER NOT NULL DEFAULT 0,
@@ -383,4 +387,3 @@ WITH CHECK (
   realtime.topic() IN ('diaristas','demandas','setores_custom','registros_financeiros','lojas','setor_valores','rede_valores')
   OR realtime.topic() LIKE 'realtime:public:%'
 );
-

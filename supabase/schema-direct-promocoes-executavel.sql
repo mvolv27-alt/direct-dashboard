@@ -1,9 +1,12 @@
 -- Direct Promocoes - schema executavel para Supabase
 -- Como usar:
+-- Banco que ja possui as tabelas: execute somente migracao-isolamento-por-supervisor.sql.
+-- Projeto novo, sem as tabelas: siga os passos abaixo.
 -- 1. Abra o Supabase > SQL Editor.
 -- 2. Cole este arquivo inteiro.
 -- 3. Clique em Run.
--- 4. Na Vercel, configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.
+-- 4. Execute tambem migracao-isolamento-por-supervisor.sql.
+-- 5. Na Vercel, configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.
 --
 -- O app atual usa estas tabelas:
 -- diaristas, demandas, registros_financeiros, setores_custom,
@@ -11,6 +14,16 @@
 -- As tabelas antigas direct_diaristas/direct_solicitacoes nao sao usadas pelo codigo atual.
 
 create extension if not exists pgcrypto with schema extensions;
+
+do $$
+begin
+  if not exists (
+    select 1 from auth.users where lower(email) = lower('mvolv27@gmail.com')
+  ) then
+    raise exception 'Usuario mvolv27@gmail.com nao encontrado em Authentication > Users';
+  end if;
+end;
+$$;
 
 create or replace function public.update_updated_at_column()
 returns trigger
@@ -27,16 +40,27 @@ $$;
 -- =========================
 create table if not exists public.diaristas (
   id text primary key default gen_random_uuid()::text,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   nome text not null,
   cpf text not null default '',
   telefone text not null default '',
   bairro text not null default '',
+  estado text not null default '',
+  cidade text not null default '',
+  endereco text not null default '',
+  cep text not null default '',
   setor_experiencia text[] not null default '{}',
   presencas integer not null default 0,
   faltas integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.diaristas
+  add column if not exists estado text not null default '',
+  add column if not exists cidade text not null default '',
+  add column if not exists endereco text not null default '',
+  add column if not exists cep text not null default '';
 
 drop trigger if exists trg_diaristas_updated_at on public.diaristas;
 create trigger trg_diaristas_updated_at
@@ -48,6 +72,7 @@ for each row execute function public.update_updated_at_column();
 -- =========================
 create table if not exists public.demandas (
   id text primary key default gen_random_uuid()::text,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   codigo text not null default '',
   data date not null,
   horario text not null default '',
@@ -84,6 +109,7 @@ create index if not exists idx_demandas_rede_loja_setor on public.demandas(rede,
 -- =========================
 create table if not exists public.registros_financeiros (
   id text primary key default gen_random_uuid()::text,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   diarista_id text null,
   diarista_nome text not null default '',
   loja text not null default '',
@@ -116,7 +142,9 @@ create index if not exists idx_registros_pago on public.registros_financeiros(pa
 -- =========================
 create table if not exists public.setores_custom (
   id text primary key default gen_random_uuid()::text,
-  nome text not null unique,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  nome text not null,
+  unique (user_id, nome),
   created_at timestamptz not null default now()
 );
 
@@ -125,9 +153,11 @@ create table if not exists public.setores_custom (
 -- =========================
 create table if not exists public.lojas (
   id text primary key default gen_random_uuid()::text,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   nome text not null,
   rede text not null default '',
   endereco text not null default '',
+  responsavel text not null default '',
   bairro text not null default '',
   cidade text not null default 'Fortaleza',
   uf text not null default 'CE',
@@ -148,11 +178,13 @@ create index if not exists idx_lojas_rede on public.lojas(rede);
 -- =========================
 create table if not exists public.setor_valores (
   id text primary key default gen_random_uuid()::text,
-  setor text not null unique,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  setor text not null,
   valor_min numeric(10,2) not null default 0,
   valor_max numeric(10,2) not null default 0,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (user_id, setor)
 );
 
 drop trigger if exists trg_setor_valores_updated_at on public.setor_valores;
@@ -165,10 +197,12 @@ for each row execute function public.update_updated_at_column();
 -- =========================
 create table if not exists public.rede_valores (
   id text primary key default gen_random_uuid()::text,
-  rede text not null unique,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  rede text not null,
   valor_recebido numeric(10,2) not null default 0,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (user_id, rede)
 );
 
 drop trigger if exists trg_rede_valores_updated_at on public.rede_valores;
@@ -181,12 +215,14 @@ for each row execute function public.update_updated_at_column();
 -- =========================
 create table if not exists public.copy_templates (
   id text primary key default 'default',
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   escala_gerente text not null default '📋 *ESCALA FECHADA*' || chr(10) || chr(10) || '[Escala]',
   vagas_disponiveis text not null default '🟢 *VAGAS DISPONÍVEIS*' || chr(10) || chr(10) || '[Vagas]',
   escala_diarista text not null default '✅ *CONFIRMAÇÃO DE ESCALA*' || chr(10) || chr(10) || '📍 [RedeLoja]' || chr(10) || '🏷️ [Setor]' || chr(10) || chr(10) || '*Diarista:* [Diarista]' || chr(10) || '*CPF:* [CPF]' || chr(10) || chr(10) || '[EscalaDiarista]' || chr(10) || chr(10) || chr(10) || '[FaltaTexto]',
   texto_falta text not null default '⚠️ Em caso de falta, avise com antecedência. Faltas sem aviso podem prejudicar as empresas e oportunidades futuras.',
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (user_id)
 );
 
 drop trigger if exists trg_copy_templates_updated_at on public.copy_templates;
@@ -235,10 +271,8 @@ begin
     execute format('drop policy if exists "direct authenticated update %1$s" on public.%1$I', t);
     execute format('drop policy if exists "direct authenticated delete %1$s" on public.%1$I', t);
 
-    execute format('create policy "direct authenticated read %1$s" on public.%1$I for select to authenticated using (true)', t);
-    execute format('create policy "direct authenticated insert %1$s" on public.%1$I for insert to authenticated with check (true)', t);
-    execute format('create policy "direct authenticated update %1$s" on public.%1$I for update to authenticated using (true) with check (true)', t);
-    execute format('create policy "direct authenticated delete %1$s" on public.%1$I for delete to authenticated using (true)', t);
+    -- Sem politica aberta por padrao. A migracao de isolamento cria as
+    -- politicas definitivas depois de adicionar e preencher user_id.
   end loop;
 end;
 $$;
@@ -246,14 +280,15 @@ $$;
 -- =========================
 -- SEEDS BASICOS
 -- =========================
-insert into public.lojas (id, nome, rede, endereco, bairro, cidade, uf, ativo) values
-('00000000-0000-4000-8000-000000000101', 'Frangolandia - Varjota', 'Frangolandia', 'Rua Frei Mansueto, 909', 'Varjota', 'Fortaleza', 'CE', true),
-('00000000-0000-4000-8000-000000000102', 'Hipermarket - Vila Uniao', 'Hipermarket', 'Rua Livreiro Gualter, 123', 'Vila Uniao', 'Fortaleza', 'CE', true),
-('00000000-0000-4000-8000-000000000103', 'Hipermarket - Jardim Cearense', 'Hipermarket', 'Rua Rubens Monte, 380', 'Jardim Cearense', 'Fortaleza', 'CE', true),
-('00000000-0000-4000-8000-000000000104', 'Hipermarket - Serrinha', 'Hipermarket', 'Rua Freire Alemao, 356', 'Serrinha', 'Fortaleza', 'CE', true),
-('00000000-0000-4000-8000-000000000105', 'Hipermarket - Mondubim', 'Hipermarket', 'Av. Benjamim Brasil, 1099', 'Mondubim', 'Fortaleza', 'CE', true),
-('00000000-0000-4000-8000-000000000106', 'Hipermarket - Eusebio', 'Hipermarket', 'Rua Embauba, 5', 'Eusebio', 'Eusebio', 'CE', true)
+insert into public.lojas (id, user_id, nome, rede, endereco, bairro, cidade, uf, ativo) values
+('00000000-0000-4000-8000-000000000101', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Frangolandia - Varjota', 'Frangolandia', 'Rua Frei Mansueto, 909', 'Varjota', 'Fortaleza', 'CE', true),
+('00000000-0000-4000-8000-000000000102', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Hipermarket - Vila Uniao', 'Hipermarket', 'Rua Livreiro Gualter, 123', 'Vila Uniao', 'Fortaleza', 'CE', true),
+('00000000-0000-4000-8000-000000000103', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Hipermarket - Jardim Cearense', 'Hipermarket', 'Rua Rubens Monte, 380', 'Jardim Cearense', 'Fortaleza', 'CE', true),
+('00000000-0000-4000-8000-000000000104', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Hipermarket - Serrinha', 'Hipermarket', 'Rua Freire Alemao, 356', 'Serrinha', 'Fortaleza', 'CE', true),
+('00000000-0000-4000-8000-000000000105', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Hipermarket - Mondubim', 'Hipermarket', 'Av. Benjamim Brasil, 1099', 'Mondubim', 'Fortaleza', 'CE', true),
+('00000000-0000-4000-8000-000000000106', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Hipermarket - Eusebio', 'Hipermarket', 'Rua Embauba, 5', 'Eusebio', 'Eusebio', 'CE', true)
 on conflict (id) do update set
+  user_id = excluded.user_id,
   nome = excluded.nome,
   rede = excluded.rede,
   endereco = excluded.endereco,
@@ -262,29 +297,33 @@ on conflict (id) do update set
   uf = excluded.uf,
   ativo = excluded.ativo;
 
-insert into public.rede_valores (id, rede, valor_recebido) values
-('00000000-0000-4000-8000-000000000201', 'Frangolandia', 109.25),
-('00000000-0000-4000-8000-000000000202', 'Hipermarket', 124.50)
-on conflict (rede) do update set valor_recebido = excluded.valor_recebido;
+insert into public.rede_valores (id, user_id, rede, valor_recebido) values
+('00000000-0000-4000-8000-000000000201', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Frangolandia', 109.25),
+('00000000-0000-4000-8000-000000000202', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Hipermarket', 124.50)
+on conflict (user_id, rede) do update set valor_recebido = excluded.valor_recebido;
 
-insert into public.setor_valores (id, setor, valor_min, valor_max) values
-('00000000-0000-4000-8000-000000000301', 'Acougueiro', 85, 90),
-('00000000-0000-4000-8000-000000000302', 'Balconista de Acougue', 85, 90),
-('00000000-0000-4000-8000-000000000303', 'Balconista de Frios', 85, 90),
-('00000000-0000-4000-8000-000000000304', 'Balconista de Padaria', 85, 90),
-('00000000-0000-4000-8000-000000000305', 'Forneiro', 85, 90),
-('00000000-0000-4000-8000-000000000306', 'Limpeza', 85, 90),
-('00000000-0000-4000-8000-000000000307', 'Operador de caixa', 85, 90),
-('00000000-0000-4000-8000-000000000308', 'Repositor de Frios', 85, 90),
-('00000000-0000-4000-8000-000000000309', 'Repositor de Hortifruti', 85, 90),
-('00000000-0000-4000-8000-000000000310', 'Repositor de Mercearia', 85, 90)
-on conflict (setor) do update set
+insert into public.setor_valores (id, user_id, setor, valor_min, valor_max) values
+('00000000-0000-4000-8000-000000000301', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Acougueiro', 85, 90),
+('00000000-0000-4000-8000-000000000302', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Balconista de Acougue', 85, 90),
+('00000000-0000-4000-8000-000000000303', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Balconista de Frios', 85, 90),
+('00000000-0000-4000-8000-000000000304', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Balconista de Padaria', 85, 90),
+('00000000-0000-4000-8000-000000000305', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Forneiro', 85, 90),
+('00000000-0000-4000-8000-000000000306', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Limpeza', 85, 90),
+('00000000-0000-4000-8000-000000000307', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Operador de caixa', 85, 90),
+('00000000-0000-4000-8000-000000000308', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Repositor de Frios', 85, 90),
+('00000000-0000-4000-8000-000000000309', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Repositor de Hortifruti', 85, 90),
+('00000000-0000-4000-8000-000000000310', (select id from auth.users where lower(email) = lower('mvolv27@gmail.com') limit 1), 'Repositor de Mercearia', 85, 90)
+on conflict (user_id, setor) do update set
   valor_min = excluded.valor_min,
   valor_max = excluded.valor_max;
 
-insert into public.copy_templates (id)
-values ('default')
-on conflict (id) do nothing;
+insert into public.copy_templates (id, user_id)
+select
+  'user-' || id::text,
+  id
+from auth.users
+where lower(email) = lower('mvolv27@gmail.com')
+on conflict (user_id) do nothing;
 
 -- =========================
 -- REALTIME

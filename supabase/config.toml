@@ -1,1 +1,4 @@
 project_id = "wmiqyzbnvbqzunlgcyqj"
+
+[functions.invite-supervisor]
+verify_jwt = true
