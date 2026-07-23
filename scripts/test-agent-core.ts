@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { analisarSolicitacao } from "../src/lib/solicitacaoAgent";
+import { buscarEnderecoLoja } from "../src/lib/addressLookup";
 import type { Loja, RedeValor, SetorValor } from "../src/hooks/useConfig";
 
 const lojas: Loja[] = [
@@ -22,12 +23,13 @@ const setores: SetorValor[] = [
 
 const redes: RedeValor[] = [
   { id: "rede-1", rede: "Frangolandia", valor_recebido: 124.5 },
+  { id: "rede-2", rede: "Super do Povo", valor_recebido: 134 },
 ];
 
 const novaSolicitacao = analisarSolicitacao(
   `*NOVA SOLICITAÇÃO*
 
-Loja: super do povo passare
+Loja: super do povo antonio sales
 Função: fflv
 Horário: 10:00 as 18:20
 Data de inicio: 23/07
@@ -36,12 +38,15 @@ observação: 2 balconista fflv`,
   { lojas, setores, redes, hoje: new Date(2026, 6, 22) },
 );
 
-assert.equal(novaSolicitacao.campos.rede, "Super Do Povo");
-assert.equal(novaSolicitacao.campos.loja, "Super Do Povo - Passare");
+assert.equal(novaSolicitacao.campos.rede, "Super do Povo");
+assert.equal(novaSolicitacao.campos.loja, "Super do Povo - Antonio Sales");
+assert.equal(novaSolicitacao.campos.bairro, "Antonio Sales");
 assert.equal(novaSolicitacao.campos.setor, "Balconista FLV");
 assert.equal(novaSolicitacao.campos.entrada, "10:00");
 assert.equal(novaSolicitacao.campos.saida, "18:20");
 assert.equal(novaSolicitacao.campos.vagas, 2);
+assert.equal(novaSolicitacao.campos.valorDiaria, 90);
+assert.equal(novaSolicitacao.campos.valorRecebidoRede, 134);
 assert.deepEqual(novaSolicitacao.campos.datas, [
   "2026-07-23",
   "2026-07-24",
@@ -49,7 +54,7 @@ assert.deepEqual(novaSolicitacao.campos.datas, [
   "2026-07-26",
   "2026-07-27",
 ]);
-assert.equal(novaSolicitacao.encontrados.rede, false);
+assert.equal(novaSolicitacao.encontrados.rede, true);
 assert.equal(novaSolicitacao.encontrados.loja, false);
 assert.equal(novaSolicitacao.encontrados.setor, false);
 
@@ -93,4 +98,37 @@ Quantidade de dias: 1`,
 assert.deepEqual(dataInvalida.campos.datas, []);
 assert.ok(dataInvalida.avisos.includes("Informe a data inicial."));
 
-console.log("Agente: 4 cenários validados com sucesso.");
+const endereco = await buscarEnderecoLoja(
+  {
+    rede: "Super do Povo",
+    loja: "Super do Povo - Antonio Sales",
+    bairro: "Antonio Sales",
+    cidade: "Fortaleza",
+    uf: "CE",
+  },
+  (async () =>
+    new Response(
+      JSON.stringify([
+        {
+          display_name: "Avenida Antônio Sales, 1000, Dionísio Torres, Fortaleza, Ceará, Brasil",
+          lat: "-3.742",
+          lon: "-38.505",
+          address: {
+            road: "Avenida Antônio Sales",
+            house_number: "1000",
+            suburb: "Dionísio Torres",
+            city: "Fortaleza",
+            "ISO3166-2-lvl4": "BR-CE",
+          },
+        },
+      ]),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch,
+);
+
+assert.equal(endereco?.endereco, "Avenida Antônio Sales, 1000");
+assert.equal(endereco?.bairro, "Dionísio Torres");
+assert.equal(endereco?.cidade, "Fortaleza");
+assert.equal(endereco?.uf, "CE");
+
+console.log("Agente: 5 cenários validados com sucesso.");
