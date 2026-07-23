@@ -26,31 +26,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Trash2, Search, Star, FileText, Phone, MapPin, Briefcase, Calendar, MessageCircle, History } from "lucide-react";
 import { toast } from "sonner";
+import {
+  formatarCEP as formatCEP,
+  formatarCPF as formatCPF,
+  formatarTelefone as formatPhone,
+} from "@/lib/diaristaAgent";
 
 function generateId() {
   return crypto.randomUUID();
-}
-
-function formatCPF(value: string) {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
-  return digits
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-}
-
-function formatPhone(value: string) {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
-  if (digits.length > 10) {
-    return digits.replace(/^(\d{2})(\d{5})(\d{4})$/, "($1) $2-$3");
-  }
-  if (digits.length > 6) {
-    return digits.replace(/^(\d{2})(\d{4})(\d{0,4})$/, "($1) $2-$3");
-  }
-  if (digits.length > 2) {
-    return digits.replace(/^(\d{2})(\d{0,5})$/, "($1) $2");
-  }
-  return digits;
 }
 
 function starsFromValue(v: number, size = 14) {
@@ -144,7 +127,11 @@ type FormState = {
   nome: string;
   cpf: string;
   telefone: string;
+  estado: string;
+  cidade: string;
   bairro: string;
+  endereco: string;
+  cep: string;
   setorExperiencia: string[];
 };
 
@@ -152,7 +139,11 @@ const emptyForm: FormState = {
   nome: "",
   cpf: "",
   telefone: "",
+  estado: "",
+  cidade: "",
   bairro: "",
+  endereco: "",
+  cep: "",
   setorExperiencia: [],
 };
 
@@ -201,6 +192,10 @@ export default function DiaristaPage() {
       d.nome.toLowerCase().includes(search.toLowerCase()) ||
       d.cpf.includes(search) ||
       d.bairro.toLowerCase().includes(search.toLowerCase()) ||
+      (d.cidade || "").toLowerCase().includes(search.toLowerCase()) ||
+      (d.estado || "").toLowerCase().includes(search.toLowerCase()) ||
+      (d.endereco || "").toLowerCase().includes(search.toLowerCase()) ||
+      (d.cep || "").includes(search) ||
       d.setorExperiencia.some((s) => s.toLowerCase().includes(search.toLowerCase()))
   );
 
@@ -215,6 +210,19 @@ export default function DiaristaPage() {
   function handleSave() {
     if (!form.nome || !form.cpf) {
       toast.error("Nome e CPF são obrigatórios");
+      return;
+    }
+    if (form.cpf.replace(/\D/g, "").length !== 11) {
+      toast.error("Informe um CPF com 11 números");
+      return;
+    }
+    const cpfDuplicado = diaristas.some(
+      (item) =>
+        item.id !== editingId &&
+        item.cpf.replace(/\D/g, "") === form.cpf.replace(/\D/g, ""),
+    );
+    if (cpfDuplicado) {
+      toast.error("Já existe um diarista cadastrado com este CPF");
       return;
     }
 
@@ -251,7 +259,11 @@ export default function DiaristaPage() {
       nome: d.nome,
       cpf: d.cpf,
       telefone: d.telefone,
+      estado: d.estado || "",
+      cidade: d.cidade || "",
       bairro: d.bairro,
+      endereco: d.endereco || "",
+      cep: d.cep || "",
       setorExperiencia: d.setorExperiencia,
     });
     setEditingId(d.id);
@@ -348,7 +360,7 @@ export default function DiaristaPage() {
               Novo Diarista
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-5 text-sm">
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-5 text-sm">
             <DialogHeader>
               <DialogTitle>{editingId ? "Editar" : "Cadastrar"} Diarista</DialogTitle>
             </DialogHeader>
@@ -361,7 +373,7 @@ export default function DiaristaPage() {
                   placeholder="Nome do diarista"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-1.5">
                   <Label>CPF *</Label>
                   <Input
@@ -381,12 +393,48 @@ export default function DiaristaPage() {
                   />
                 </div>
               </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label>Estado</Label>
+                  <Input
+                    value={form.estado}
+                    onChange={(e) => setForm({ ...form, estado: e.target.value })}
+                    placeholder="Ex.: Ceará"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Cidade</Label>
+                  <Input
+                    value={form.cidade}
+                    onChange={(e) => setForm({ ...form, cidade: e.target.value })}
+                    placeholder="Ex.: Fortaleza"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Bairro</Label>
+                  <Input
+                    value={form.bairro}
+                    onChange={(e) => setForm({ ...form, bairro: e.target.value })}
+                    placeholder="Bairro onde mora"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>CEP</Label>
+                  <Input
+                    value={form.cep}
+                    onChange={(e) => setForm({ ...form, cep: formatCEP(e.target.value) })}
+                    placeholder="00000-000"
+                    maxLength={9}
+                    inputMode="numeric"
+                  />
+                </div>
+              </div>
               <div className="grid gap-1.5">
-                <Label>Bairro</Label>
+                <Label>Rua/Nº</Label>
                 <Input
-                  value={form.bairro}
-                  onChange={(e) => setForm({ ...form, bairro: e.target.value })}
-                  placeholder="Bairro onde mora"
+                  value={form.endereco}
+                  onChange={(e) => setForm({ ...form, endereco: e.target.value })}
+                  placeholder="Rua, número e complemento"
                 />
               </div>
               <div className="grid gap-1.5">
@@ -462,7 +510,7 @@ export default function DiaristaPage() {
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           className="pl-9"
-          placeholder="Buscar por nome, CPF, setor ou bairro..."
+          placeholder="Buscar por nome, CPF, localização ou setor..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -526,7 +574,9 @@ export default function DiaristaPage() {
                     </div>
                     <div className="flex items-center gap-1.5 min-w-0 text-muted-foreground">
                       <MapPin size={13} className="text-primary shrink-0" />
-                      <span className="truncate">{d.bairro || "Sem bairro"}</span>
+                      <span className="truncate" title={[d.bairro, d.cidade, d.estado].filter(Boolean).join(" - ")}>
+                        {[d.bairro, d.cidade && `${d.cidade}${d.estado ? `/${d.estado}` : ""}`].filter(Boolean).join(" - ") || "Sem localização"}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5 min-w-0 text-muted-foreground">
                       <FileText size={13} className="text-primary shrink-0" />
@@ -538,6 +588,14 @@ export default function DiaristaPage() {
                         {setores.join(", ")}
                       </span>
                     </div>
+                    {(d.endereco || d.cep) && (
+                      <div className="col-span-2 flex items-start gap-1.5 min-w-0 text-muted-foreground">
+                        <MapPin size={13} className="text-primary shrink-0" />
+                        <span className="truncate" title={[d.endereco, d.cep].filter(Boolean).join(" - ")}>
+                          {[d.endereco, d.cep].filter(Boolean).join(" - ")}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-3">

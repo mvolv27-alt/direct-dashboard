@@ -4,6 +4,10 @@ export interface Diarista {
   cpf: string;
   telefone: string;
   bairro: string;
+  estado?: string;
+  cidade?: string;
+  endereco?: string;
+  cep?: string;
   setorExperiencia: string[];
   presencas: number;
   faltas: number;

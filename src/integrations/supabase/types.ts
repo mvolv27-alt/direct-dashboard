@@ -185,8 +185,12 @@ export type Database = {
       diaristas: {
         Row: {
           bairro: string
+          cep: string
+          cidade: string
           cpf: string
           created_at: string
+          endereco: string
+          estado: string
           faltas: number
           id: string
           nome: string
@@ -198,8 +202,12 @@ export type Database = {
         }
         Insert: {
           bairro?: string
+          cep?: string
+          cidade?: string
           cpf?: string
           created_at?: string
+          endereco?: string
+          estado?: string
           faltas?: number
           id?: string
           nome: string
@@ -211,8 +219,12 @@ export type Database = {
         }
         Update: {
           bairro?: string
+          cep?: string
+          cidade?: string
           cpf?: string
           created_at?: string
+          endereco?: string
+          estado?: string
           faltas?: number
           id?: string
           nome?: string

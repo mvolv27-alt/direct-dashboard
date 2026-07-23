@@ -6,7 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { saveDemanda, saveSetorCustom } from "@/lib/storage";
+import {
+  getDiaristas,
+  saveDemanda,
+  saveDiarista,
+  saveSetorCustom,
+  updateDiarista,
+} from "@/lib/storage";
+import { useLiveData } from "@/lib/sync";
 import {
   useLojas,
   useRedeValores,
@@ -15,8 +22,16 @@ import {
   upsertRedeValor,
   upsertSetorValor,
 } from "@/hooks/useConfig";
-import type { Demanda } from "@/types";
+import type { Demanda, Diarista } from "@/types";
 import { buscarEnderecoLoja, type SugestaoEndereco } from "@/lib/addressLookup";
+import {
+  analisarCadastroDiarista,
+  type CadastroDiaristaPlano,
+  detectarTipoTextoAgente,
+  formatarCEP,
+  formatarCPF,
+  formatarTelefone,
+} from "@/lib/diaristaAgent";
 import {
   analisarSolicitacao,
   codigoDemanda,
@@ -78,11 +93,13 @@ function horarioValido(valor: string) {
 }
 
 export default function AgentePage() {
+  const diaristas = useLiveData(getDiaristas, ["diaristas"]);
   const { rows: lojas } = useLojas();
   const { rows: setores } = useSetorValores();
   const { rows: redes } = useRedeValores();
   const [texto, setTexto] = useState("");
   const [plano, setPlano] = useState<AgenteSolicitacaoPlano | null>(null);
+  const [cadastroDiarista, setCadastroDiarista] = useState<CadastroDiaristaPlano | null>(null);
   const [datasDigitadas, setDatasDigitadas] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [analisando, setAnalisando] = useState(false);
@@ -146,6 +163,16 @@ export default function AgentePage() {
     }
     setAnalisando(true);
     setMapaUrl("");
+    if (detectarTipoTextoAgente(texto) === "diarista") {
+      const resultado = analisarCadastroDiarista(texto, diaristas);
+      setCadastroDiarista(resultado);
+      setPlano(null);
+      setDatasDigitadas("");
+      setAnalisando(false);
+      toast.success(resultado.existente ? "Diarista encontrado na base" : "Cadastro de diarista analisado");
+      return;
+    }
+    setCadastroDiarista(null);
     const resultado = analisarSolicitacao(texto, { lojas, setores, redes });
     setPlano(resultado);
     setDatasDigitadas(resultado.campos.datas.map(formatDate).join(", "));
@@ -193,6 +220,67 @@ export default function AgentePage() {
           }
         : prev,
     );
+  }
+
+  function updateCadastroDiarista<K extends keyof CadastroDiaristaPlano["campos"]>(
+    campo: K,
+    valor: CadastroDiaristaPlano["campos"][K],
+  ) {
+    setCadastroDiarista((prev) =>
+      prev
+        ? {
+            ...prev,
+            campos: { ...prev.campos, [campo]: valor },
+          }
+        : prev,
+    );
+  }
+
+  function confirmarCadastroDiarista() {
+    if (!cadastroDiarista) return;
+    const c = cadastroDiarista.campos;
+    if (!c.nome.trim()) {
+      toast.error("Informe o nome completo");
+      return;
+    }
+    if (c.cpf.replace(/\D/g, "").length !== 11) {
+      toast.error("Informe um CPF com 11 números");
+      return;
+    }
+
+    const base: Pick<
+      Diarista,
+      "nome" | "cpf" | "telefone" | "estado" | "cidade" | "bairro" | "endereco" | "cep" | "setorExperiencia"
+    > = {
+      nome: c.nome.trim(),
+      cpf: formatarCPF(c.cpf),
+      telefone: formatarTelefone(c.telefone),
+      estado: c.estado.trim(),
+      cidade: c.cidade.trim(),
+      bairro: c.bairro.trim(),
+      endereco: c.endereco.trim(),
+      cep: formatarCEP(c.cep),
+      setorExperiencia: c.setores,
+    };
+
+    if (cadastroDiarista.existente) {
+      updateDiarista({
+        ...cadastroDiarista.existente,
+        ...base,
+      });
+      toast.success("Cadastro do diarista atualizado");
+    } else {
+      saveDiarista({
+        ...base,
+        id: uid(),
+        presencas: 0,
+        faltas: 0,
+        createdAt: new Date().toISOString(),
+      });
+      toast.success("Diarista cadastrado pelo agente");
+    }
+    setCadastroDiarista(null);
+    setTexto("");
   }
 
   function validarAntesDeSalvar() {
@@ -295,6 +383,7 @@ export default function AgentePage() {
 
       toast.success(`${datasRevisadas.length} demanda(s) cadastrada(s) pelo agente`);
       setPlano(null);
+      setCadastroDiarista(null);
       setTexto("");
       setDatasDigitadas("");
       setMapaUrl("");
@@ -317,7 +406,7 @@ export default function AgentePage() {
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Agente de Solicitações</h1>
           <p className="text-sm text-muted-foreground">
-            Cole a mensagem recebida, revise os campos e confirme para cadastrar.
+            Cole uma demanda ou os dados de um diarista, revise e confirme o cadastro.
           </p>
         </div>
         <Button type="button" variant="outline" onClick={() => setTexto(exemplo)}>
@@ -348,7 +437,51 @@ export default function AgentePage() {
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          {!plano ? (
+          {cadastroDiarista ? (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="font-semibold text-card-foreground">
+                    {cadastroDiarista.existente ? "Atualizar cadastro do diarista" : "Confirmar cadastro do diarista"}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Complete agora o que tiver disponível; os demais dados podem ser preenchidos depois.
+                  </p>
+                </div>
+                <Badge variant={cadastroDiarista.existente ? "secondary" : "outline"}>
+                  {cadastroDiarista.existente ? "CPF já cadastrado" : "Novo diarista"}
+                </Badge>
+              </div>
+
+              {cadastroDiarista.avisos.length > 0 && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+                  {cadastroDiarista.avisos.map((aviso) => <p key={aviso}>{aviso}</p>)}
+                </div>
+              )}
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field className="md:col-span-2" label="Nome completo *" value={cadastroDiarista.campos.nome} onChange={(v) => updateCadastroDiarista("nome", v)} />
+                <Field label="CPF *" value={cadastroDiarista.campos.cpf} onChange={(v) => updateCadastroDiarista("cpf", formatarCPF(v))} />
+                <Field label="Telefone/WhatsApp" value={cadastroDiarista.campos.telefone} onChange={(v) => updateCadastroDiarista("telefone", formatarTelefone(v))} />
+                <Field label="Estado" value={cadastroDiarista.campos.estado} onChange={(v) => updateCadastroDiarista("estado", v)} />
+                <Field label="Cidade" value={cadastroDiarista.campos.cidade} onChange={(v) => updateCadastroDiarista("cidade", v)} />
+                <Field label="Bairro" value={cadastroDiarista.campos.bairro} onChange={(v) => updateCadastroDiarista("bairro", v)} />
+                <Field label="CEP" value={cadastroDiarista.campos.cep} onChange={(v) => updateCadastroDiarista("cep", formatarCEP(v))} />
+                <Field className="md:col-span-2" label="Rua/Nº" value={cadastroDiarista.campos.endereco} onChange={(v) => updateCadastroDiarista("endereco", v)} />
+                <Field
+                  className="md:col-span-2"
+                  label="Setores de experiência"
+                  value={cadastroDiarista.campos.setores.join(", ")}
+                  onChange={(v) => updateCadastroDiarista("setores", v.split(",").map((item) => item.trim()).filter(Boolean))}
+                />
+              </div>
+
+              <Button type="button" className="w-full" onClick={confirmarCadastroDiarista}>
+                <CheckCircle2 size={16} />
+                {cadastroDiarista.existente ? "Atualizar cadastro" : "Confirmar e cadastrar diarista"}
+              </Button>
+            </div>
+          ) : !plano ? (
             <div className="grid min-h-[470px] place-items-center rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
               <div>
                 <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary">
