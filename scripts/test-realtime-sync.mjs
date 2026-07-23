@@ -114,7 +114,8 @@ try {
   });
   if (insertError) throw new Error(`Falha ao criar evento Realtime: ${insertError.message}`);
 
-  const deadline = Date.now() + 15_000;
+  // Hosted projects can take a little longer to wake the Realtime pipeline.
+  const deadline = Date.now() + 30_000;
   while (!receivedByA && Date.now() < deadline) {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
   }
