@@ -1,4 +1,4 @@
-const CACHE_NAME = "direct-promocoes-v1";
+const CACHE_NAME = "direct-promocoes-v2";
 const CORE_ASSETS = ["/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
