@@ -423,7 +423,7 @@ export default function AgentePage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 pb-24 lg:pb-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+          <div className="aurora-icon flex h-10 w-10 shrink-0 items-center justify-center bg-primary/12 text-primary">
             <Bot size={20} />
           </div>
           <div className="min-w-0">

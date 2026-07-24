@@ -46,6 +46,7 @@ test.describe("professional responsive UI", () => {
       const lightToggle = page.getByRole("button", { name: "Mudar para tema claro" }).first();
       if (await lightToggle.isVisible()) await lightToggle.evaluate((button: HTMLButtonElement) => button.click());
       await expect(page.locator("html")).not.toHaveClass(/dark/);
+      await page.waitForTimeout(300);
       await expectNoHorizontalOverflow(page);
 
       await page.screenshot({

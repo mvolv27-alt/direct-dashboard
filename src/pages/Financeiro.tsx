@@ -85,7 +85,7 @@ function KpiCard({
 
   return (
     <div
-      className={`surface-panel hover-lift min-h-[112px] border-l-[3px] p-4 flex flex-col justify-between overflow-hidden ${edgeTone} ${border}`}
+      className={`surface-panel metric-accent hover-lift min-h-[112px] border-l-[3px] p-4 flex flex-col justify-between overflow-hidden ${edgeTone} ${border}`}
     >
       <div className={`flex items-start gap-2 min-h-[30px] ${tone}`}>
         {Icon && <Icon size={16} className="mt-px shrink-0" strokeWidth={2} />}
@@ -366,7 +366,7 @@ export default function FinanceiroPage() {
       {/* Header */}
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-success/12 text-success">
+          <div className="aurora-icon flex h-10 w-10 shrink-0 items-center justify-center bg-success/12 text-success">
             <DollarSign size={20} />
           </div>
           <div className="min-w-0">
@@ -574,7 +574,7 @@ export default function FinanceiroPage() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
-          <section className="surface-panel p-4 space-y-4 overflow-hidden">
+          <section className="surface-panel finance-panel p-4 space-y-4 overflow-hidden">
             <div>
               <h3 className="text-sm font-semibold text-foreground">Empresa</h3>
               <p className="text-xs text-muted-foreground">
@@ -628,7 +628,7 @@ export default function FinanceiroPage() {
             </div>
           </section>
 
-          <section className="surface-panel p-4 space-y-4 overflow-hidden">
+          <section className="surface-panel finance-panel p-4 space-y-4 overflow-hidden">
             <div>
               <h3 className="text-sm font-semibold text-foreground">Diaristas</h3>
               <p className="text-xs text-muted-foreground">

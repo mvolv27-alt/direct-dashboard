@@ -1221,7 +1221,7 @@ export default function DemandasPage() {
       {/* Header */}
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+          <div className="aurora-icon flex h-10 w-10 shrink-0 items-center justify-center bg-primary/12 text-primary">
             <ClipboardList size={20} />
           </div>
           <div className="min-w-0">
@@ -1772,7 +1772,7 @@ export default function DemandasPage() {
               return (
                 <div
                   key={rede}
-                  className="surface-panel overflow-hidden"
+                  className="surface-panel demand-group overflow-hidden"
                 >
                   <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-primary/5 border-b border-border">
                     <button
@@ -2008,7 +2008,7 @@ function StatCard({
     muted: "bg-muted text-muted-foreground",
   };
   return (
-    <div className={`surface-panel hover-lift flex min-h-[88px] items-center gap-3 border-l-[3px] p-4 ${
+    <div className={`surface-panel metric-accent hover-lift flex min-h-[88px] items-center gap-3 border-l-[3px] p-4 ${
       tone === "primary"
         ? "border-l-primary"
         : tone === "success"
@@ -2404,7 +2404,7 @@ function DemandaCard({
   );
 
   return (
-    <div className="surface-panel hover-lift grid gap-4 p-4 md:grid-cols-[110px_1fr_auto] md:items-start">
+    <div className="surface-panel demand-card hover-lift grid gap-4 p-4 md:grid-cols-[110px_1fr_auto] md:items-start">
       {/* Time column */}
       <div className="flex md:flex-col md:items-start items-center gap-2 md:gap-0">
         <p className="text-xl font-bold text-foreground leading-none">{demanda.horario}</p>

@@ -5,24 +5,24 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.98]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.97]",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 hover:shadow-sm",
+          "gradient-primary text-primary-foreground shadow-[0_10px_26px_hsl(var(--primary)/0.22)] hover:-translate-y-0.5 hover:shadow-[0_14px_34px_hsl(var(--primary)/0.3)]",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90 hover:shadow-sm",
+          "bg-gradient-to-br from-destructive to-accent text-destructive-foreground shadow-[0_10px_26px_hsl(var(--destructive)/0.2)] hover:-translate-y-0.5 hover:shadow-[0_14px_32px_hsl(var(--destructive)/0.28)]",
         outline:
-          "border border-border bg-card text-foreground shadow-2xs hover:border-primary/45 hover:bg-muted/55",
+          "border border-white/60 bg-card/55 text-foreground shadow-2xs backdrop-blur-xl hover:-translate-y-0.5 hover:border-primary/45 hover:bg-card/80 hover:shadow-sm dark:border-white/12",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/90 hover:shadow-sm",
+          "gradient-success text-secondary-foreground shadow-[0_10px_26px_hsl(var(--secondary)/0.2)] hover:-translate-y-0.5 hover:shadow-[0_14px_32px_hsl(var(--secondary)/0.28)]",
         success:
-          "bg-success text-success-foreground shadow-xs hover:bg-success/90 hover:shadow-sm",
+          "bg-gradient-to-br from-success to-secondary text-success-foreground shadow-[0_10px_26px_hsl(var(--success)/0.2)] hover:-translate-y-0.5 hover:shadow-[0_14px_32px_hsl(var(--success)/0.28)]",
         warning:
-          "bg-warning text-warning-foreground shadow-xs hover:bg-warning/90 hover:shadow-sm",
+          "gradient-warning text-warning-foreground shadow-[0_10px_26px_hsl(var(--warning)/0.2)] hover:-translate-y-0.5 hover:shadow-[0_14px_32px_hsl(var(--warning)/0.28)]",
         ghost:
-          "text-foreground hover:bg-muted hover:text-foreground",
+          "text-foreground hover:bg-card/70 hover:text-foreground hover:shadow-2xs",
         link:
           "text-primary underline-offset-4 hover:underline hover:text-primary-glow",
       },
