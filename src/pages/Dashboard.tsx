@@ -405,7 +405,7 @@ export default function Dashboard() {
           {!priorities.length ? (
             <div className="grid min-h-[280px] place-items-center px-5 py-10 text-center"><div><CheckCircle2 className="mx-auto text-success" size={30} /><p className="mt-3 font-medium text-card-foreground">Operação sem pendências</p><p className="mt-1 text-sm text-muted-foreground">Nenhuma ação urgente para este dia.</p></div></div>
           ) : (
-            <div className="divide-y divide-border/60">{priorities.slice(0, 10).map((priority) => {
+            <div className="divide-y divide-border/60 xl:max-h-[460px] xl:overflow-y-auto">{priorities.slice(0, 10).map((priority) => {
               const Icon = priority.icon;
               const iconColor = priority.tone === "critical" ? "bg-destructive/10 text-destructive" : priority.tone === "high" ? "bg-warning/10 text-warning" : priority.tone === "medium" ? "bg-primary/10 text-primary" : "bg-secondary/10 text-secondary";
               return <Link key={priority.id} to={priority.demandCode ? `/demandas?busca=${encodeURIComponent(priority.demandCode)}` : "/demandas"} className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary">

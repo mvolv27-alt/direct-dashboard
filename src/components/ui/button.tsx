@@ -5,16 +5,16 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.97]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[14px] text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.97]",
   {
     variants: {
       variant: {
         default:
-          "gradient-primary text-primary-foreground shadow-[0_10px_26px_hsl(var(--primary)/0.22)] hover:-translate-y-0.5 hover:shadow-[0_14px_34px_hsl(var(--primary)/0.3)]",
+          "gradient-primary text-primary-foreground shadow-[0_10px_24px_hsl(var(--primary)/0.24)] hover:-translate-y-1 hover:shadow-[0_16px_34px_hsl(var(--primary)/0.32)]",
         destructive:
           "bg-gradient-to-br from-destructive to-accent text-destructive-foreground shadow-[0_10px_26px_hsl(var(--destructive)/0.2)] hover:-translate-y-0.5 hover:shadow-[0_14px_32px_hsl(var(--destructive)/0.28)]",
         outline:
-          "border border-white/60 bg-card/55 text-foreground shadow-2xs backdrop-blur-xl hover:-translate-y-0.5 hover:border-primary/45 hover:bg-card/80 hover:shadow-sm dark:border-white/12",
+          "border border-border/80 bg-card/90 text-foreground shadow-xs backdrop-blur-xl hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-sm dark:border-white/12 dark:bg-card/85",
         secondary:
           "gradient-success text-secondary-foreground shadow-[0_10px_26px_hsl(var(--secondary)/0.2)] hover:-translate-y-0.5 hover:shadow-[0_14px_32px_hsl(var(--secondary)/0.28)]",
         success:
@@ -22,7 +22,7 @@ const buttonVariants = cva(
         warning:
           "gradient-warning text-warning-foreground shadow-[0_10px_26px_hsl(var(--warning)/0.2)] hover:-translate-y-0.5 hover:shadow-[0_14px_32px_hsl(var(--warning)/0.28)]",
         ghost:
-          "text-foreground hover:bg-card/70 hover:text-foreground hover:shadow-2xs",
+          "text-foreground hover:bg-primary/8 hover:text-primary hover:shadow-2xs",
         link:
           "text-primary underline-offset-4 hover:underline hover:text-primary-glow",
       },
