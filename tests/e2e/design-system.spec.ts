@@ -62,4 +62,30 @@ test.describe("professional responsive UI", () => {
     await expect(page.getByRole("button", { name: "Sair da conta" })).toBeVisible();
     await expect(page.getByRole("status")).toBeVisible();
   });
+
+  test("dialogs stay centered and scroll inside the viewport", async ({ page }, testInfo) => {
+    const cases = [
+      { route: "financeiro", button: /Novo Registro/i },
+      { route: "demandas", button: /Nova Demanda/i },
+      { route: "diaristas", button: /Novo Diarista/i },
+    ];
+
+    for (const dialogCase of cases) {
+      await page.goto(`/#/${dialogCase.route}`);
+      await page.getByRole("button", { name: dialogCase.button }).click();
+
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+
+      const bounds = await dialog.boundingBox();
+      const viewport = page.viewportSize();
+      expect(bounds).not.toBeNull();
+      expect(viewport).not.toBeNull();
+      expect(bounds!.y).toBeGreaterThanOrEqual(6);
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport!.height - 6);
+      await page.screenshot({ path: testInfo.outputPath(`dialog-${dialogCase.route}.png`) });
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+    }
+  });
 });
