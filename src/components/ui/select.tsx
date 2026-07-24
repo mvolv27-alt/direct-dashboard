@@ -17,7 +17,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-10 w-full items-center justify-between rounded-xl border border-white/65 bg-background/55 px-3 py-2 text-sm font-medium text-foreground shadow-2xs backdrop-blur-xl transition-all duration-200 placeholder:text-muted-foreground hover:border-primary/35 hover:bg-card/70 focus:outline-none focus:border-primary focus:bg-card/80 focus:ring-4 focus:ring-primary/12 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/12 [&>span]:line-clamp-1",
+      "flex h-10 w-full items-center justify-between rounded-[14px] border border-border/85 bg-card/82 px-3 py-2 text-sm font-medium text-foreground shadow-2xs backdrop-blur-xl transition-all duration-200 placeholder:text-muted-foreground hover:border-primary/35 hover:bg-card focus:outline-none focus:border-primary focus:bg-card focus:ring-4 focus:ring-primary/12 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/12 dark:bg-background/36 [&>span]:line-clamp-1",
       className,
     )}
     {...props}
@@ -66,7 +66,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-2xl border border-white/60 bg-popover/88 text-popover-foreground shadow-xl backdrop-blur-2xl dark:border-white/12 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-[18px] border border-border/80 bg-popover/96 text-popover-foreground shadow-xl backdrop-blur-2xl dark:border-white/12 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className,

@@ -1,47 +1,55 @@
-# Design QA - Central de Operacao
+# Design QA - Direct Color Surface
 
-- Source visual truth: `audit-visual/source-central-option3.png`
-- Implementation screenshot: `audit-visual/08-central-final-dark.png`
-- Full comparison: `audit-visual/07-central-comparison.png`
-- Viewport: 1280 x 720 implementation; source normalized to the same height for comparison
-- State: dark theme, authenticated account, synchronized, no demands on the selected day
+## Evidence
 
-## Full-view comparison evidence
+- Source visual truth: `C:/Users/vinip/.codex/codex-remote-attachments/019f110e-2ca4-7410-bbfb-921adfaefdb5/427D801C-FBF7-45CA-AFF6-8A9EC7E1CE99/1-Foto-1.jpg` and `2-Foto-2.jpg`.
+- Implementation light: `test-results/artifacts/design-system-professional-9137d-rt-in-light-and-dark-themes-desktop-chromium/dashboard-light.png`.
+- Implementation dark: `test-results/artifacts/design-system-professional-9137d-rt-in-light-and-dark-themes-desktop-chromium/dashboard-dark.png`.
+- Mobile evidence: `test-results/artifacts/design-system-professional-989f8-rt-in-light-and-dark-themes-iphone-14-pro-max/demandas-light.png`.
+- Side-by-side evidence: `test-results/design-comparison-light.png`.
+- Desktop viewport: 1440 x 1000 CSS px at device scale factor 1.
+- Mobile viewport: Playwright iPhone 14 Pro Max profile at device scale factor 3.
+- Source pixels: 1280 x 894 and 1280 x 894. Implementation desktop pixels: 1440 x 1000.
+- Comparison normalization: source and implementation were scaled to 800 px height without changing aspect ratio, then placed side by side.
+- State: authenticated dashboard, populated operational data, light and dark themes.
 
-The implementation preserves the selected concept's hierarchy: compact sidebar, date and primary actions in the header, five operational metrics, priority queue, coverage matrix and recent activity. The current account had no demands, so the implementation correctly renders empty states instead of the populated mock data.
+## Full-view comparison
 
-## Focused region evidence
+The implementation matches the references at the intended design-language level: saturated KPI cards lead the hierarchy, neutral floating surfaces organize detailed content, the navigation is visually separate from the canvas, and color communicates operational state. The Direct violet-blue gradient replaces the reference brands while teal, green, coral and amber preserve the lively multicolor rhythm.
 
-A separate crop was not required. The full comparison keeps the header, metrics and all three operational regions readable at the captured resolution. The target contains no raster product imagery, logos or custom illustrations that require asset-level comparison; interface icons use the existing product icon library.
+## Focused region comparison
 
-## Findings
+Financeiro was reviewed separately because it is the densest KPI surface. Its two panels retain readable labels and values in dark mode, with consistent radius, spacing and semantic color. Demandas was reviewed on iPhone 14 Pro Max to confirm the two-column KPI layout, sticky navigation and filters remain inside the viewport.
 
-- No P0, P1 or P2 visual differences remain for the selected desktop screen.
-- Empty-state coverage originally used an alarming color; it was changed to the neutral primary tone when there are no slots.
-- The mobile coverage matrix now has a dedicated compact layout and does not depend on horizontal page scrolling.
-- Light and dark themes preserve readable foreground/background contrast in the captured states.
-- The source uses populated operational data; a populated implementation screenshot was not produced because the available authenticated test state contained no demands and production data was not mutated.
+## Fidelity surfaces
 
-## Interaction verification
-
-- Central route loads and is the authenticated default route.
-- Nova demanda opens the real demand form.
-- Date selector updates the selected operation day.
-- Resolve priorities is disabled when there is nothing to resolve.
-- Light and dark theme toggles work.
-- Demand search links are generated from the real demand code.
-- Browser console has no runtime error. Existing React Router future-version warnings are non-blocking.
-- The demand dialog accessibility warning was fixed with an associated description.
+- Fonts and typography: Inter Variable is bundled locally. Labels, values and headings are sharp, use appropriate optical weights, and do not rely on negative tracking.
+- Spacing and layout rhythm: 20-24 px surface radii, compact 12-16 px control radii, short shadows and consistent section gaps reproduce the floating-card rhythm without changing operational density.
+- Colors and visual tokens: light mode uses white surfaces on a cool neutral canvas; dark mode uses near-black graphite surfaces. Direct violet-blue is primary, with teal, green, coral and amber semantic families. Contrast remains legible in both themes.
+- Image quality and asset fidelity: the references are framed product photographs used as style direction, not app-owned imagery. The application requires no replacement raster assets; existing Lucide interface icons remain crisp at every density.
+- Copy and content: product copy and real operational data were preserved. No reference-brand text was copied into the Direct product.
 
 ## Comparison history
 
-1. Initial pass: empty coverage appeared as a red alert and the mobile coverage matrix depended on a wide table.
-2. Fixes: neutral empty coverage tone, purpose-built mobile coverage rows, dialog description and schedule conflict prevention.
-3. Post-fix evidence: `audit-visual/08-central-final-dark.png`; TypeScript, ESLint and production build pass.
+1. Initial pass found a P2 composition imbalance: the Prioridades list could grow far below the neighboring dashboard panels.
+2. The desktop list received a 460 px maximum height with internal scrolling, while mobile keeps natural page scrolling.
+3. Post-fix capture shows a balanced first viewport with the KPI row and three content columns aligned.
 
-## Residual P3 polish
+## Findings
 
-- Repeat the visual capture with a dedicated non-production test account containing realistic demands to verify dense list wrapping and coverage percentages.
-- Capture a physical iPhone 14 Pro Max after deployment to verify Safari safe-area behavior with the new fifth bottom-navigation item.
+No actionable P0, P1 or P2 visual differences remain for the requested style translation.
+
+## Follow-up polish
+
+- P3: add optional chart visualizations to the Central when the product has approved chart metrics.
+- P3: introduce per-card entrance staggering only after checking motion preference with supervisors.
+
+## Verification
+
+- Primary routes tested: Central, Demandas and Financeiro.
+- Themes tested: light and dark.
+- Responsive profile tested: desktop and iPhone 14 Pro Max.
+- Browser console: no framework error overlay encountered by the automated route checks.
+- Primary interactions: navigation, theme toggle, account controls and responsive viewport checks are covered by the E2E suite.
 
 final result: passed
