@@ -73,17 +73,27 @@ function KpiCard({
   tone?: string;
   border?: string;
 }) {
+  const edgeTone = tone.includes("success")
+    ? "border-l-success"
+    : tone.includes("warning")
+      ? "border-l-warning"
+      : tone.includes("destructive")
+        ? "border-l-destructive"
+        : tone.includes("secondary")
+          ? "border-l-secondary"
+          : "border-l-primary";
+
   return (
     <div
-      className={`glass border-soft rounded-xl hover-lift min-h-[118px] p-3.5 flex flex-col justify-between overflow-hidden ${border}`}
+      className={`surface-panel hover-lift min-h-[112px] border-l-[3px] p-4 flex flex-col justify-between overflow-hidden ${edgeTone} ${border}`}
     >
-      <div className={`flex items-start gap-1.5 min-h-[34px] ${tone}`}>
-        {Icon && <Icon size={15} className="mt-0.5 shrink-0" />}
-        <span className="text-[9px] uppercase leading-tight font-semibold break-words">
+      <div className={`flex items-start gap-2 min-h-[30px] ${tone}`}>
+        {Icon && <Icon size={16} className="mt-px shrink-0" strokeWidth={2} />}
+        <span className="text-[10px] uppercase leading-snug font-bold">
           {title}
         </span>
       </div>
-      <p className={`text-xl font-bold text-center leading-none ${tone.includes("success") || tone.includes("destructive") ? tone : "text-card-foreground"}`}>
+      <p className={`text-xl font-extrabold text-left leading-none tabular-nums ${tone.includes("success") || tone.includes("destructive") ? tone : "text-card-foreground"}`}>
         R$ {formatCurrency(value)}
       </p>
     </div>
@@ -355,11 +365,16 @@ export default function FinanceiroPage() {
     <div className="space-y-6 min-w-0 overflow-x-hidden">
       {/* Header */}
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold text-foreground">Financeiro</h1>
-          <p className="text-sm text-muted-foreground">
-            {registros.length} registro(s)
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-success/12 text-success">
+            <DollarSign size={20} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="page-heading truncate">Financeiro</h1>
+            <p className="text-sm text-muted-foreground">
+              {registros.length} registro(s)
+            </p>
+          </div>
         </div>
 
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setForm(emptyForm); setEditingId(null); } }}>
@@ -559,7 +574,7 @@ export default function FinanceiroPage() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
-          <section className="rounded-xl border border-border/60 bg-card/70 p-4 space-y-3 overflow-hidden">
+          <section className="surface-panel p-4 space-y-4 overflow-hidden">
             <div>
               <h3 className="text-sm font-semibold text-foreground">Empresa</h3>
               <p className="text-xs text-muted-foreground">
@@ -567,7 +582,7 @@ export default function FinanceiroPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 auto-rows-fr">
+            <div className="finance-kpi-grid">
               <KpiCard
                 title="Confirmada"
                 value={forecast.confirmado}
@@ -613,7 +628,7 @@ export default function FinanceiroPage() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-border/60 bg-card/70 p-4 space-y-3 overflow-hidden">
+          <section className="surface-panel p-4 space-y-4 overflow-hidden">
             <div>
               <h3 className="text-sm font-semibold text-foreground">Diaristas</h3>
               <p className="text-xs text-muted-foreground">
@@ -621,7 +636,7 @@ export default function FinanceiroPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 auto-rows-fr">
+            <div className="finance-kpi-grid">
               <KpiCard
                 title="Confirmada"
                 value={forecast.diaristasConfirmado}
@@ -681,7 +696,7 @@ export default function FinanceiroPage() {
       </div>
 
       {/* Lista (cards no mobile, tabela em telas maiores) */}
-      <div className="glass border-soft rounded-xl hover-lift overflow-hidden">
+      <div className="surface-panel overflow-hidden">
         {loading ? (
           <div className="p-2 space-y-1">
             {Array.from({ length: 5 }).map((_, i) => (

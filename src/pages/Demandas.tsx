@@ -61,6 +61,7 @@ import {
   UserCheck,
   UserX,
   RefreshCw,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { adoptLegacyStorage, scopedStorageKey } from "@/lib/userScope";
@@ -1219,11 +1220,16 @@ export default function DemandasPage() {
     <div className="space-y-6 min-w-0 overflow-x-hidden">
       {/* Header */}
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold text-foreground">Demandas</h1>
-          <p className="text-sm text-muted-foreground">
-            Acompanhe as diárias de supermercado
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+            <ClipboardList size={20} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="page-heading truncate">Demandas</h1>
+            <p className="text-sm text-muted-foreground">
+              Acompanhe as diárias de supermercado
+            </p>
+          </div>
         </div>
         <Dialog
           open={open}
@@ -1572,7 +1578,7 @@ export default function DemandasPage() {
 
       {/* Tabs + Search */}
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted/50 p-1 sm:flex sm:flex-wrap">
+        <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-card p-1 sm:flex sm:flex-wrap">
           <TabBtn active={tab === "todas"} onClick={() => setTab("todas")} label="Todas" count={counts.total} />
           <TabBtn active={tab === "pendente"} onClick={() => setTab("pendente")} label="Aguardando" count={counts.pendente} />
           <TabBtn active={tab === "concluida"} onClick={() => setTab("concluida")} label="Presentes" count={counts.presente} />
@@ -1627,7 +1633,7 @@ export default function DemandasPage() {
         </div>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-2 overflow-hidden rounded-xl border border-border/60 bg-card/55 p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_160px_auto]">
+      <div className="surface-panel grid min-w-0 grid-cols-1 gap-2 overflow-hidden p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_160px_auto]">
         <Select
           value={redeFilter}
           onValueChange={(value) => {
@@ -1727,7 +1733,7 @@ export default function DemandasPage() {
       {/* Lista agrupada por Rede > Loja > Dia > Horário > Setor */}
       <div className="space-y-4">
         {filtered.length === 0 ? (
-          <div className="glass border-soft rounded-2xl hover-lift p-8 text-center text-muted-foreground text-sm">
+          <div className="surface-panel p-8 text-center text-muted-foreground text-sm">
             Nenhuma demanda encontrada.
           </div>
         ) : (
@@ -1766,7 +1772,7 @@ export default function DemandasPage() {
               return (
                 <div
                   key={rede}
-                  className="bg-card/50 rounded-2xl border border-border overflow-hidden"
+                  className="surface-panel overflow-hidden"
                 >
                   <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-primary/5 border-b border-border">
                     <button
@@ -2002,11 +2008,19 @@ function StatCard({
     muted: "bg-muted text-muted-foreground",
   };
   return (
-    <div className="glass border-soft rounded-2xl hover-lift p-4 flex items-center gap-3">
+    <div className={`surface-panel hover-lift flex min-h-[88px] items-center gap-3 border-l-[3px] p-4 ${
+      tone === "primary"
+        ? "border-l-primary"
+        : tone === "success"
+          ? "border-l-success"
+          : tone === "warning"
+            ? "border-l-destructive"
+            : "border-l-warning"
+    }`}>
       <div className={`p-2.5 rounded-lg ${tones[tone]}`}>{icon}</div>
       <div className="min-w-0">
-        <p className="text-xl font-bold text-card-foreground leading-tight">{value}</p>
-        <p className="text-xs text-muted-foreground truncate">{label}</p>
+        <p className="text-xl font-extrabold tabular-nums text-card-foreground leading-tight">{value}</p>
+        <p className="text-[11px] font-semibold uppercase text-muted-foreground truncate">{label}</p>
       </div>
     </div>
   );
@@ -2028,7 +2042,7 @@ function TabBtn({
       onClick={onClick}
       className={`px-3 py-1.5 text-sm rounded-md whitespace-nowrap transition-colors flex items-center gap-1.5 ${
         active
-          ? "bg-card text-foreground shadow-sm font-medium"
+          ? "bg-primary/10 text-primary font-semibold"
           : "text-muted-foreground hover:text-foreground"
       }`}
     >
@@ -2390,7 +2404,7 @@ function DemandaCard({
   );
 
   return (
-    <div className="glass border-soft rounded-2xl hover-lift p-4 grid md:grid-cols-[110px_1fr_auto] gap-4 items-start shadow-sm">
+    <div className="surface-panel hover-lift grid gap-4 p-4 md:grid-cols-[110px_1fr_auto] md:items-start">
       {/* Time column */}
       <div className="flex md:flex-col md:items-start items-center gap-2 md:gap-0">
         <p className="text-xl font-bold text-foreground leading-none">{demanda.horario}</p>
@@ -2460,7 +2474,7 @@ function DemandaCard({
                       Copiar
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="z-[120] w-[min(92vw,520px)] rounded-2xl p-3" align="end" sideOffset={8}>
+                  <PopoverContent className="z-[120] w-[min(92vw,520px)] p-3" align="end" sideOffset={8}>
                     <div className="space-y-3">
                       <div>
                         <p className="text-xs font-semibold text-foreground">

@@ -26,4 +26,23 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("@supabase")) return "supabase";
+          if (id.includes("react-dom") || id.includes("react-router") || id.includes("/react/")) {
+            return "react";
+          }
+          if (id.includes("@radix-ui") || id.includes("cmdk") || id.includes("vaul")) {
+            return "ui-primitives";
+          }
+          if (id.includes("recharts") || id.includes("d3-")) return "charts";
+          if (id.includes("date-fns") || id.includes("react-day-picker")) return "dates";
+          return undefined;
+        },
+      },
+    },
+  },
 }));

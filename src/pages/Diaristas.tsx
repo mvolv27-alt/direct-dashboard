@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Search, Star, FileText, Phone, MapPin, Briefcase, Calendar, MessageCircle, History } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Star, FileText, Phone, MapPin, Briefcase, Calendar, MessageCircle, History, Users } from "lucide-react";
 import { toast } from "sonner";
 import {
   formatarCEP as formatCEP,
@@ -346,11 +346,16 @@ export default function DiaristaPage() {
   return (
     <div className="space-y-6 min-w-0 overflow-x-hidden">
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold text-foreground">Diaristas</h1>
-          <p className="text-sm text-muted-foreground">
-            {diaristas.length} cadastrado(s)
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary/12 text-secondary">
+            <Users size={20} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="page-heading truncate">Diaristas</h1>
+            <p className="text-sm text-muted-foreground">
+              {diaristas.length} cadastrado(s)
+            </p>
+          </div>
         </div>
 
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setForm(emptyForm); setEditingId(null); } }}>
@@ -524,7 +529,7 @@ export default function DiaristaPage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="glass border-soft rounded-xl hover-lift p-8 text-center text-muted-foreground text-sm animate-fade-in">
+        <div className="surface-panel p-8 text-center text-muted-foreground text-sm animate-fade-in">
           Nenhum diarista encontrado.
         </div>
       ) : (
@@ -539,7 +544,7 @@ export default function DiaristaPage() {
             return (
               <div
                 key={d.id}
-                className="rounded-xl border border-border/60 bg-card/75 shadow-[0_14px_34px_-26px_hsl(var(--foreground)/0.45)] backdrop-blur overflow-hidden animate-in-up transition-colors hover:border-primary/35"
+                className="surface-panel hover-lift overflow-hidden animate-in-up border-t-[3px] border-t-secondary/70"
                 style={{ animationDelay: `${Math.min(50, 0)}ms` }}
               >
                 <div className="p-4 space-y-4">
@@ -567,7 +572,7 @@ export default function DiaristaPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-muted/20 p-3 text-xs">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-border/70 bg-muted/35 p-3 text-xs">
                     <div className="flex items-center gap-1.5 min-w-0 text-muted-foreground">
                       <Phone size={13} className="text-primary shrink-0" />
                       <span className="truncate">{d.telefone || "Sem telefone"}</span>
@@ -601,7 +606,7 @@ export default function DiaristaPage() {
                   <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-3">
                     <button
                       onClick={() => setHistoryFor(d)}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-primary/20 bg-primary/10 px-2.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors"
                     >
                       <History size={14} />
                       Histórico
