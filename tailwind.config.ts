@@ -14,9 +14,10 @@ export default {
   		}
   	},
   	extend: {
-  		fontFamily: {
-  			sans: [
-				'Manrope',
+		fontFamily: {
+			sans: [
+				'Plus Jakarta Sans Variable',
+				'Plus Jakarta Sans',
   				'ui-sans-serif',
   				'system-ui',
   				'-apple-system',

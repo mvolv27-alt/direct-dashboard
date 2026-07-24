@@ -347,7 +347,7 @@ export default function DiaristaPage() {
     <div className="space-y-6 min-w-0 overflow-x-hidden">
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary/12 text-secondary">
+          <div className="aurora-icon flex h-10 w-10 shrink-0 items-center justify-center bg-secondary/12 text-secondary">
             <Users size={20} />
           </div>
           <div className="min-w-0">
@@ -544,7 +544,7 @@ export default function DiaristaPage() {
             return (
               <div
                 key={d.id}
-                className="surface-panel hover-lift overflow-hidden animate-in-up border-t-[3px] border-t-secondary/70"
+                className="surface-panel diarista-card hover-lift overflow-hidden animate-in-up border-t-[3px] border-t-secondary/70"
                 style={{ animationDelay: `${Math.min(50, 0)}ms` }}
               >
                 <div className="p-4 space-y-4">

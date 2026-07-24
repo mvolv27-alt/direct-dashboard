@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { lazy, Suspense } from "react";
+import { LoaderCircle, Sparkles } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -26,6 +27,23 @@ const Protected = ({ children }: { children: React.ReactNode }) => (
   </ProtectedRoute>
 );
 
+const AppLoading = () => (
+  <div className="grid min-h-dvh place-items-center px-4">
+    <div className="glass-strong flex min-w-[240px] items-center gap-3 rounded-2xl p-4 text-foreground animate-in-up">
+      <div className="aurora-icon gradient-primary grid h-11 w-11 shrink-0 place-items-center text-primary-foreground">
+        <Sparkles size={18} />
+      </div>
+      <div className="min-w-0">
+        <p className="font-bold">Preparando sua operação</p>
+        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <LoaderCircle className="animate-spin text-primary" size={13} />
+          Carregando dados sincronizados
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange={false}>
@@ -33,7 +51,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <Suspense fallback={<div className="grid min-h-dvh place-items-center text-sm text-muted-foreground">Carregando...</div>}>
+          <Suspense fallback={<AppLoading />}>
             <HashRouter>
               <Routes>
                 <Route path="/auth" element={<Auth />} />

@@ -45,11 +45,11 @@ export default function Auth() {
     <div className="min-h-dvh flex items-center justify-center bg-muted/35 p-4">
       <div className="surface-panel w-full max-w-md p-6 sm:p-8 animate-in-up">
         <div className="flex items-center gap-3 mb-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+          <div className="aurora-icon gradient-primary flex h-10 w-10 items-center justify-center text-primary-foreground shadow-sm">
             <Sparkles size={20} />
           </div>
           <h1 className="text-xl font-extrabold text-foreground">
-            <span className="text-primary">Direct</span> Promoções
+            <span className="text-gradient">Direct</span> Promoções
           </h1>
         </div>
         <p className="text-sm text-muted-foreground mb-6">

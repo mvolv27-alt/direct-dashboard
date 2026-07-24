@@ -155,9 +155,9 @@ function MetricCard({ icon: Icon, label, value, helper, tone }: {
     secondary: { icon: "bg-secondary/10 text-secondary", edge: "border-l-secondary" },
   }[tone];
   return (
-    <div className={`surface-panel hover-lift min-h-[118px] border-l-[3px] p-4 ${colors.edge}`}>
+    <div className={`surface-panel metric-accent hover-lift min-h-[118px] border-l-[3px] p-4 ${colors.edge}`}>
       <div className="flex items-center gap-2.5">
-        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${colors.icon}`}><Icon size={18} /></div>
+        <div className={`aurora-icon grid h-9 w-9 shrink-0 place-items-center ${colors.icon}`}><Icon size={18} /></div>
         <span className="text-[11px] font-bold uppercase text-muted-foreground">{label}</span>
       </div>
       <p className="mt-3 text-2xl font-extrabold leading-none text-card-foreground">{value}</p>
@@ -366,7 +366,7 @@ export default function Dashboard() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><LayoutDashboard size={19} /></div>
+            <div className="aurora-icon grid h-10 w-10 place-items-center bg-primary/12 text-primary"><LayoutDashboard size={19} /></div>
             <h1 className="page-heading text-foreground">Central de Operação</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">Prioridades, cobertura e atividade em tempo real.</p>
@@ -375,7 +375,7 @@ export default function Dashboard() {
           <label className="relative block">
             <span className="sr-only">Dia da operação</span>
             <CalendarDays className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-            <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="h-10 w-full rounded-md border border-input bg-card pl-9 pr-3 text-sm text-foreground shadow-2xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:w-[168px]" />
+            <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="h-10 w-full rounded-xl border border-white/60 bg-card/55 pl-9 pr-3 text-sm font-medium text-foreground shadow-2xs backdrop-blur-xl outline-none transition-all hover:border-primary/35 focus:border-primary focus:bg-card/80 focus:ring-4 focus:ring-primary/12 dark:border-white/12 sm:w-[168px]" />
           </label>
           <Button asChild variant="outline" className="h-10 gap-2"><Link to="/demandas?nova=1"><Plus size={16} /> Nova demanda</Link></Button>
           <Button className="h-10 gap-2" disabled={!priorities.length} onClick={() => prioritiesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}><Zap size={16} /> Resolver prioridades</Button>
@@ -397,7 +397,7 @@ export default function Dashboard() {
       </section>
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.15fr)_300px]">
-        <section ref={prioritiesRef} className="surface-panel scroll-mt-24 overflow-hidden">
+        <section ref={prioritiesRef} className="surface-panel dashboard-section scroll-mt-24 overflow-hidden">
           <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
             <div><h2 className="font-semibold text-card-foreground">Prioridades</h2><p className="text-xs text-muted-foreground">Ordenadas por urgência e horário</p></div>
             <span className="rounded-md bg-destructive/10 px-2 py-1 text-xs font-bold text-destructive">{priorities.length}</span>
@@ -417,7 +417,7 @@ export default function Dashboard() {
           )}
         </section>
 
-        <section className="surface-panel overflow-hidden">
+        <section className="surface-panel dashboard-section overflow-hidden">
           <div className="flex items-center justify-between border-b border-border/70 px-4 py-3"><div><h2 className="font-semibold text-card-foreground">Cobertura por loja e período</h2><p className="text-xs text-muted-foreground">Vagas preenchidas em cada faixa de horário</p></div><Store size={18} className="text-primary" /></div>
           {!coverage.length ? (
             <div className="grid min-h-[280px] place-items-center px-5 py-10 text-center"><div><CalendarDays className="mx-auto text-muted-foreground" size={28} /><p className="mt-3 font-medium text-card-foreground">Sem demandas neste dia</p><p className="mt-1 text-sm text-muted-foreground">Escolha outra data ou crie uma nova demanda.</p></div></div>
@@ -472,7 +472,7 @@ export default function Dashboard() {
           )}
         </section>
 
-        <aside className="surface-panel overflow-hidden">
+        <aside className="surface-panel dashboard-section overflow-hidden">
           <div className="flex items-center justify-between border-b border-border/70 px-4 py-3"><div><h2 className="font-semibold text-card-foreground">Atividade recente</h2><p className="text-xs text-muted-foreground">Histórico da equipe</p></div><History size={17} className="text-primary" /></div>
           {!activities.length ? <div className="px-4 py-10 text-center text-sm text-muted-foreground">Nenhuma atividade disponível.</div> : <div className="divide-y divide-border/55">{activities.map((activity) => <div key={activity.id} className="px-4 py-3"><div className="flex items-start gap-2.5"><div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><RefreshCw size={13} /></div><div className="min-w-0"><p className="text-xs font-semibold text-card-foreground">{actionNames[activity.action.toUpperCase()] || activity.action}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{tableNames[activity.table_name] || activity.table_name.replace(/_/g, " ")}</p><p className="mt-1 truncate text-[10px] text-muted-foreground/75" title={activity.actor_email}>{activity.actor_email || "Sistema"} · {relativeTime(activity.created_at)}</p></div></div></div>)}</div>}
         </aside>

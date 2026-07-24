@@ -79,7 +79,7 @@ export default function ConfiguracoesPage() {
   return (
     <div className="space-y-5 min-w-0 overflow-x-hidden">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-warning/12 text-warning">
+        <div className="aurora-icon flex h-10 w-10 shrink-0 items-center justify-center bg-warning/12 text-warning">
           <Settings size={20} />
         </div>
         <div className="min-w-0">
