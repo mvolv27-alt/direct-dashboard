@@ -103,7 +103,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   const compact = true;
-  const sidebarW = "lg:w-16";
+  const sidebarW = "lg:w-[68px]";
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -124,7 +124,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </DialogContent>
         </Dialog>
         <aside
-          className={`fixed top-0 left-0 lg:sticky lg:top-3 z-50 hidden h-fit max-h-[calc(100dvh-1.5rem)] my-3 ml-3 gradient-sidebar flex-col rounded-2xl border border-sidebar-border shadow-xl overflow-visible transition-all duration-300 ease-in-out lg:flex ${sidebarW}`}
+          className={`fixed left-0 top-0 z-50 my-3 ml-3 hidden h-fit max-h-[calc(100dvh-1.5rem)] flex-col overflow-visible rounded-lg border border-sidebar-border gradient-sidebar lg:sticky lg:top-3 lg:flex ${sidebarW}`}
         >
           {!compact && (
             <div className="border-b border-sidebar-border flex items-center justify-between px-6 py-5">
@@ -137,11 +137,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </div>
           )}
 
-          <nav className={`${compact ? "p-2" : "p-3"} space-y-1.5`}>
+          <nav className={`${compact ? "p-2" : "p-3"} space-y-1`} aria-label="Navegacao principal">
             {navItems.map((item) => {
               const active = location.pathname === item.to;
               const baseClasses = active
-                ? "gradient-primary text-primary-foreground shadow-[0_4px_18px_-4px_hsl(var(--primary)/0.55)]"
+                ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-xs"
                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
               const collapsedClasses = compact
                 ? "justify-center px-2 py-2.5"
@@ -151,7 +151,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   <Link
                     key={item.to}
                     to={item.to}
-                    className={`flex items-center rounded-lg text-sm font-medium transition-all duration-200 press-down ${collapsedClasses} ${baseClasses}`}
+                    className={`flex min-h-10 items-center rounded-md text-sm font-semibold transition-colors press-down ${collapsedClasses} ${baseClasses}`}
                   >
                   <item.icon size={18} />
                   {!compact && <span className="whitespace-nowrap">{item.label}</span>}
@@ -175,7 +175,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <SyncIndicator status={syncStatus} compact />
 
           {session && (
-            <div className={`border-t border-sidebar-border space-y-2 ${compact ? "px-2 py-3" : "p-4"}`}>
+            <div className={`space-y-1 border-t border-sidebar-border ${compact ? "px-2 py-2" : "p-4"}`}>
               {!compact && (
                 <p className="text-[11px] text-sidebar-muted truncate" title={user?.email ?? ""}>
                   {user?.email}
@@ -208,11 +208,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           )}
         </aside>
 
-        <main className="flex-1 min-h-dvh w-full min-w-0 lg:pl-0">
-          <div className="mobile-app-header fixed inset-x-0 top-0 z-40 border-b border-border/60 bg-background/88 px-3 pb-2 pt-2 backdrop-blur-xl lg:hidden">
+        <main className="min-h-dvh w-full min-w-0 flex-1 lg:pl-2">
+          <div className="mobile-app-header fixed inset-x-0 top-0 z-40 border-b border-border bg-background/95 px-4 pb-2 pt-2 shadow-xs backdrop-blur-xl lg:hidden">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-sm font-bold leading-tight text-foreground">
+                <p className="text-sm font-extrabold leading-tight text-foreground">
                   <span className="text-primary">Direct</span> Promoções
                 </p>
                 <p className="truncate text-[11px] text-muted-foreground">Gestão de diaristas</p>
@@ -234,10 +234,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
           </div>
-          <div className="app-content p-3 pt-20 sm:p-6 sm:pt-6 lg:pl-7 lg:pr-6 overflow-auto safe-bottom animate-fade-in">{children}</div>
+          <div className="app-content mx-auto w-full max-w-[1680px] overflow-auto p-3 pt-20 sm:p-6 sm:pt-6 lg:px-7 safe-bottom animate-fade-in">{children}</div>
         </main>
 
-        <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/92 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/96 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-8px_24px_hsl(0_0%_0%/0.08)] backdrop-blur-xl lg:hidden" aria-label="Navegacao mobile">
           <div className="grid grid-cols-6 gap-0.5">
             {navItems.map((item) => {
               const active = location.pathname === item.to;
@@ -245,9 +245,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 py-2 text-[9px] font-semibold transition-colors ${
+                  className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-2 text-[9px] font-semibold transition-colors ${
                     active
-                      ? "bg-primary text-primary-foreground shadow-[0_8px_20px_-12px_hsl(var(--primary)/0.8)]"
+                      ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >

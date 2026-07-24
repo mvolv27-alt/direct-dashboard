@@ -49,6 +49,7 @@ import {
   X,
   FileText,
   UserRound,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProfile } from "@/hooks/useProfile";
@@ -77,11 +78,16 @@ export default function ConfiguracoesPage() {
 
   return (
     <div className="space-y-5 min-w-0 overflow-x-hidden">
-      <div className="min-w-0">
-        <h1 className="truncate text-2xl font-bold text-foreground">Configurações</h1>
-        <p className="text-sm text-muted-foreground">
-          Gerencie lojas, setores e valores do sistema
-        </p>
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-warning/12 text-warning">
+          <Settings size={20} />
+        </div>
+        <div className="min-w-0">
+          <h1 className="page-heading truncate">Configurações</h1>
+          <p className="text-sm text-muted-foreground">
+            Gerencie lojas, setores e valores do sistema
+          </p>
+        </div>
       </div>
 
       <Tabs defaultValue="lojas" className="space-y-4">

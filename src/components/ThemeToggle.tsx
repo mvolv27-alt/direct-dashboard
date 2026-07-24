@@ -20,7 +20,7 @@ export default function ThemeToggle() {
       onClick={toggle}
       aria-label={isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
       title={isDark ? "Tema claro" : "Tema escuro"}
-      className="relative inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border/60 bg-card/60 text-foreground hover:bg-muted/60 hover:border-primary/40 transition-all press-down"
+      className="relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-foreground shadow-2xs transition-colors hover:border-primary/40 hover:bg-muted press-down"
     >
       {mounted ? (
         isDark ? <Sun size={16} className="text-warning" /> : <Moon size={16} className="text-primary" />

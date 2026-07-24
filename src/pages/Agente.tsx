@@ -421,16 +421,17 @@ export default function AgentePage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 pb-24 lg:pb-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-            <Bot size={14} />
-            Agente de cadastro
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+            <Bot size={20} />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Agente de Solicitações</h1>
-          <p className="text-sm text-muted-foreground">
-            Cole uma demanda ou os dados de um diarista, revise e confirme o cadastro.
-          </p>
+          <div className="min-w-0">
+            <h1 className="page-heading truncate">Agente de Solicitações</h1>
+            <p className="text-sm text-muted-foreground">
+              Cole uma demanda ou os dados de um diarista, revise e confirme o cadastro.
+            </p>
+          </div>
         </div>
         <Button type="button" variant="outline" onClick={() => setTexto(exemplo)}>
           <ClipboardPaste size={16} />
@@ -439,7 +440,7 @@ export default function AgentePage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <section className="surface-panel p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h2 className="font-semibold text-card-foreground">Mensagem recebida</h2>
@@ -459,7 +460,7 @@ export default function AgentePage() {
           </Button>
         </section>
 
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <section className="surface-panel p-4">
           {cadastroDiarista ? (
             <div className="space-y-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
