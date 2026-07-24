@@ -68,7 +68,7 @@ revoke all on function private.direct_is_active(uuid) from public, anon;
 grant execute on function private.direct_is_admin(uuid) to authenticated, service_role;
 grant execute on function private.direct_is_active(uuid) to authenticated, service_role;
 
-create or replace function private.direct_demanda_owned(check_id uuid, check_owner uuid)
+create or replace function private.direct_demanda_owned(check_id text, check_owner uuid)
 returns boolean
 language sql
 stable
@@ -77,11 +77,11 @@ set search_path = public, pg_temp
 as $$
   select exists (
     select 1 from public.demandas
-    where id = check_id and user_id = check_owner
+    where id::text = check_id and user_id = check_owner
   );
 $$;
 
-create or replace function private.direct_diarista_owned(check_id uuid, check_owner uuid)
+create or replace function private.direct_diarista_owned(check_id text, check_owner uuid)
 returns boolean
 language sql
 stable
@@ -90,14 +90,14 @@ set search_path = public, pg_temp
 as $$
   select exists (
     select 1 from public.diaristas
-    where id = check_id and user_id = check_owner
+    where id::text = check_id and user_id = check_owner
   );
 $$;
 
-revoke all on function private.direct_demanda_owned(uuid, uuid) from public, anon;
-revoke all on function private.direct_diarista_owned(uuid, uuid) from public, anon;
-grant execute on function private.direct_demanda_owned(uuid, uuid) to authenticated, service_role;
-grant execute on function private.direct_diarista_owned(uuid, uuid) to authenticated, service_role;
+revoke all on function private.direct_demanda_owned(text, uuid) from public, anon;
+revoke all on function private.direct_diarista_owned(text, uuid) from public, anon;
+grant execute on function private.direct_demanda_owned(text, uuid) to authenticated, service_role;
+grant execute on function private.direct_diarista_owned(text, uuid) to authenticated, service_role;
 
 create or replace function private.direct_set_updated_at()
 returns trigger
@@ -112,34 +112,63 @@ $$;
 
 revoke all on function private.direct_set_updated_at() from public, anon, authenticated;
 
-create table if not exists public.demanda_vagas (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  demanda_id uuid not null references public.demandas(id) on delete cascade,
-  numero integer not null check (numero > 0),
-  status text not null default 'aberta'
-    check (status in ('aberta', 'alocada', 'concluida', 'cancelada')),
-  version integer not null default 1 check (version > 0),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (demanda_id, numero)
-);
+do $$
+declare
+  demanda_id_type text;
+  diarista_id_type text;
+begin
+  select format_type(a.atttypid, a.atttypmod)
+    into demanda_id_type
+  from pg_attribute a
+  where a.attrelid = 'public.demandas'::regclass
+    and a.attname = 'id'
+    and not a.attisdropped;
 
-create table if not exists public.demanda_alocacoes (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  vaga_id uuid not null references public.demanda_vagas(id) on delete cascade,
-  diarista_id uuid references public.diaristas(id) on delete set null,
-  diarista_nome text not null default '',
-  status text not null default 'alocada'
-    check (status in ('alocada', 'confirmada', 'recusada', 'removida', 'substituida')),
-  alocado_em timestamptz not null default now(),
-  confirmado_em timestamptz,
-  encerrado_em timestamptz,
-  observacoes text not null default '',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+  select format_type(a.atttypid, a.atttypmod)
+    into diarista_id_type
+  from pg_attribute a
+  where a.attrelid = 'public.diaristas'::regclass
+    and a.attname = 'id'
+    and not a.attisdropped;
+
+  if demanda_id_type is null or diarista_id_type is null then
+    raise exception 'Nao foi possivel identificar os tipos dos IDs legados';
+  end if;
+
+  execute format($table$
+    create table if not exists public.demanda_vagas (
+      id uuid primary key default gen_random_uuid(),
+      user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+      demanda_id %s not null references public.demandas(id) on delete cascade,
+      numero integer not null check (numero > 0),
+      status text not null default 'aberta'
+        check (status in ('aberta', 'alocada', 'concluida', 'cancelada')),
+      version integer not null default 1 check (version > 0),
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (demanda_id, numero)
+    )
+  $table$, demanda_id_type);
+
+  execute format($table$
+    create table if not exists public.demanda_alocacoes (
+      id uuid primary key default gen_random_uuid(),
+      user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+      vaga_id uuid not null references public.demanda_vagas(id) on delete cascade,
+      diarista_id %s references public.diaristas(id) on delete set null,
+      diarista_nome text not null default '',
+      status text not null default 'alocada'
+        check (status in ('alocada', 'confirmada', 'recusada', 'removida', 'substituida')),
+      alocado_em timestamptz not null default now(),
+      confirmado_em timestamptz,
+      encerrado_em timestamptz,
+      observacoes text not null default '',
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  $table$, diarista_id_type);
+end;
+$$;
 
 create unique index if not exists demanda_alocacoes_vaga_ativa_key
 on public.demanda_alocacoes (vaga_id)
@@ -255,7 +284,7 @@ using (
 with check (
   private.direct_is_active()
   and (user_id = auth.uid() or private.direct_is_admin())
-  and private.direct_demanda_owned(demanda_id, user_id)
+  and private.direct_demanda_owned(demanda_id::text, user_id)
 );
 
 create policy "v2 owner or admin demanda alocacoes"
@@ -270,7 +299,7 @@ with check (
   and private.direct_vaga_owned(vaga_id, user_id)
   and (
     diarista_id is null
-    or private.direct_diarista_owned(diarista_id, user_id)
+    or private.direct_diarista_owned(diarista_id::text, user_id)
   )
 );
 
