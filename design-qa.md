@@ -1,55 +1,64 @@
-# Design QA - Direct Color Surface
+# Design QA - Direct Technical Finance
 
 ## Evidence
 
-- Source visual truth: `C:/Users/vinip/.codex/codex-remote-attachments/019f110e-2ca4-7410-bbfb-921adfaefdb5/427D801C-FBF7-45CA-AFF6-8A9EC7E1CE99/1-Foto-1.jpg` and `2-Foto-2.jpg`.
+- Source visual truth: `C:/Users/vinip/Downloads/880735270916928125.png`.
 - Implementation light: `test-results/artifacts/design-system-professional-9137d-rt-in-light-and-dark-themes-desktop-chromium/dashboard-light.png`.
 - Implementation dark: `test-results/artifacts/design-system-professional-9137d-rt-in-light-and-dark-themes-desktop-chromium/dashboard-dark.png`.
-- Mobile evidence: `test-results/artifacts/design-system-professional-989f8-rt-in-light-and-dark-themes-iphone-14-pro-max/demandas-light.png`.
-- Side-by-side evidence: `test-results/design-comparison-light.png`.
-- Desktop viewport: 1440 x 1000 CSS px at device scale factor 1.
-- Mobile viewport: Playwright iPhone 14 Pro Max profile at device scale factor 3.
-- Source pixels: 1280 x 894 and 1280 x 894. Implementation desktop pixels: 1440 x 1000.
-- Comparison normalization: source and implementation were scaled to 800 px height without changing aspect ratio, then placed side by side.
-- State: authenticated dashboard, populated operational data, light and dark themes.
+- Mobile light evidence: `test-results/artifacts/design-system-professional-9137d-rt-in-light-and-dark-themes-iphone-14-pro-max/dashboard-light.png`.
+- Mobile dark evidence: `test-results/artifacts/design-system-professional-989f8-rt-in-light-and-dark-themes-iphone-14-pro-max/demandas-dark.png`.
+- Dialog evidence: `test-results/artifacts/design-system-professional-614f1--scroll-inside-the-viewport-desktop-chromium/dialog-financeiro.png`.
+- Side-by-side evidence: `test-results/design-comparison-technical-dashboard.png`.
+- Desktop viewport: 1440 x 1000 CSS px, device scale factor 1.
+- Mobile viewport: Playwright iPhone 14 Pro Max profile, device scale factor 3.
+- Source pixels: 736 x 1189. Implementation dashboard pixels: 1440 x 1166 light and 1440 x 1096 dark.
+- Comparison canvas: 2200 x 1188; source was kept at its natural aspect ratio and implementation captures were proportionally contained in 733 px columns.
+- State: authenticated Direct dashboard with current account data, light and dark themes.
 
 ## Full-view comparison
 
-The implementation matches the references at the intended design-language level: saturated KPI cards lead the hierarchy, neutral floating surfaces organize detailed content, the navigation is visually separate from the canvas, and color communicates operational state. The Direct violet-blue gradient replaces the reference brands while teal, green, coral and amber preserve the lively multicolor rhythm.
+The implementation reproduces the source design language without replacing Direct's real information architecture. Both use a centered framed canvas, compact horizontal desktop navigation, a dense card grid, short blue-toned elevation, navy featured surfaces, pale technical surfaces and cyan highlights. The Direct violet remains visible in brand and active states while cyan carries the reference's technical character.
+
+The reference contains finance charts that do not exist as approved Direct metrics. No decorative or fabricated charts were added. Existing operational KPIs, priorities, coverage, audit activity, filters and actions remain the visible content.
 
 ## Focused region comparison
 
-Financeiro was reviewed separately because it is the densest KPI surface. Its two panels retain readable labels and values in dark mode, with consistent radius, spacing and semantic color. Demandas was reviewed on iPhone 14 Pro Max to confirm the two-column KPI layout, sticky navigation and filters remain inside the viewport.
+- Desktop navigation: compared at full width. Brand, page tabs and utility actions follow the same horizontal rhythm and capsule treatment as the reference.
+- KPI cards: compared on Central, Demandas and Financeiro. Light mode alternates a navy featured card with pale cards; dark mode uses consistent deep-blue panels with cyan edge light.
+- Forms and dialogs: Financeiro and Nova Demanda were captured open. Inputs, focus rings, borders, panel color and internal scrolling remain visible and centered.
+- Mobile: Demandas and Central were checked on iPhone 14 Pro Max. The desktop header becomes the existing mobile header and bottom navigation, preserving access to all six routes without horizontal overflow.
 
 ## Fidelity surfaces
 
-- Fonts and typography: Inter Variable is bundled locally. Labels, values and headings are sharp, use appropriate optical weights, and do not rely on negative tracking.
-- Spacing and layout rhythm: 20-24 px surface radii, compact 12-16 px control radii, short shadows and consistent section gaps reproduce the floating-card rhythm without changing operational density.
-- Colors and visual tokens: light mode uses white surfaces on a cool neutral canvas; dark mode uses near-black graphite surfaces. Direct violet-blue is primary, with teal, green, coral and amber semantic families. Contrast remains legible in both themes.
-- Image quality and asset fidelity: the references are framed product photographs used as style direction, not app-owned imagery. The application requires no replacement raster assets; existing Lucide interface icons remain crisp at every density.
-- Copy and content: product copy and real operational data were preserved. No reference-brand text was copied into the Direct product.
+- Fonts and typography: Inter Variable remains bundled locally. The hierarchy uses compact semibold labels, strong tabular KPI values and clear page headings with zero negative letter spacing.
+- Spacing and layout rhythm: 16 px cards, 18 px navigation/dialogs, 12 px controls, compact grid gaps and short shadows match the reference's dense dashboard proportions.
+- Colors and visual tokens: light mode uses blue-gray canvas, white/ice cards, navy featured cards, violet Direct and cyan highlights. Dark mode uses deep petroleum blue instead of black or purple, with clear white foreground and cyan borders.
+- Image quality and asset fidelity: the source is a dashboard reference and contains no required app-owned photographic assets. Existing Lucide controls remain vector-sharp; no placeholder art, rasterized UI or fake chart was introduced.
+- Copy and content: all Direct labels, records and workflows were preserved. No reference product name or financial sample data was copied.
 
 ## Comparison history
 
-1. Initial pass found a P2 composition imbalance: the Prioridades list could grow far below the neighboring dashboard panels.
-2. The desktop list received a 460 px maximum height with internal scrolling, while mobile keeps natural page scrolling.
-3. Post-fix capture shows a balanced first viewport with the KPI row and three content columns aligned.
+1. Initial implementation capture showed the intended frame, horizontal navigation and two-theme card language with no layout overflow.
+2. The complete two-project run passed 15 checks; the first mobile Central capture exceeded the 60-second suite limit while producing valid screenshots.
+3. The mobile Central case was rerun alone and passed in 40.6 seconds. No visual or functional correction was required.
+4. Side-by-side review found no actionable P0, P1 or P2 mismatch after accounting for the intentional use of real Direct operational content instead of reference-only charts.
 
 ## Findings
 
-No actionable P0, P1 or P2 visual differences remain for the requested style translation.
+No actionable P0, P1 or P2 visual differences remain for the requested UI and UX translation.
 
 ## Follow-up polish
 
-- P3: add optional chart visualizations to the Central when the product has approved chart metrics.
-- P3: introduce per-card entrance staggering only after checking motion preference with supervisors.
+- P3: approved operational charts could later occupy the empty Central state when enough historical data is available.
+- P3: page-specific chart colors can be expanded after defining authoritative metrics and aggregation periods.
 
 ## Verification
 
-- Primary routes tested: Central, Demandas and Financeiro.
-- Themes tested: light and dark.
-- Responsive profile tested: desktop and iPhone 14 Pro Max.
-- Browser console: no framework error overlay encountered by the automated route checks.
-- Primary interactions: navigation, theme toggle, account controls and responsive viewport checks are covered by the E2E suite.
+- Routes checked: Central, Agente, Demandas, Diaristas, Financeiro and Configuracoes.
+- Themes checked: light and dark.
+- Responsive profiles: 1440 x 1000 desktop and iPhone 14 Pro Max.
+- Primary interactions: navigation, theme toggle, sign-out availability and the Financeiro, Demandas and Diaristas dialogs.
+- Layout checks: no horizontal overflow; fixed navigation remains reachable; dialogs stay centered and scroll internally.
+- Browser console: no framework error overlay or route failure was observed in the automated captures.
 
 final result: passed

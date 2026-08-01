@@ -118,12 +118,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     window.location.reload();
   }
 
-  const compact = true;
-  const sidebarW = "lg:w-[72px]";
-
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex min-h-dvh w-full">
+      <div className="app-shell min-h-dvh w-full">
         <Dialog open={mustSetPassword}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
@@ -139,92 +136,63 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </Button>
           </DialogContent>
         </Dialog>
-        <aside
-          className={`fixed left-0 top-0 z-50 my-3 ml-3 hidden h-fit max-h-[calc(100dvh-1.5rem)] flex-col overflow-visible rounded-[20px] gradient-sidebar lg:sticky lg:top-3 lg:flex ${sidebarW}`}
-        >
-          {!compact && (
-            <div className="border-b border-sidebar-border flex items-center justify-between px-6 py-5">
-              <div>
-                <h1 className="text-xl font-bold text-sidebar-foreground tracking-tight whitespace-nowrap">
-                  <span className="text-sidebar-primary">Direct</span> Promoções
-                </h1>
-                <p className="text-xs text-sidebar-muted mt-1">Gestão de Diaristas - Fortaleza/CE</p>
-              </div>
-            </div>
-          )}
+        <header className="desktop-app-header sticky top-3 z-50 mx-auto mt-3 hidden w-[calc(100%-1.5rem)] max-w-[1720px] items-center gap-4 px-4 py-2.5 lg:flex">
+          <Link to="/dashboard" className="flex shrink-0 items-center gap-2.5 pr-2" aria-label="Abrir Central">
+            <span className="brand-mark grid h-9 w-9 place-items-center rounded-xl">
+              <LayoutDashboard size={18} />
+            </span>
+            <span className="min-w-0">
+              <span className="block whitespace-nowrap text-sm font-extrabold leading-tight text-foreground">
+                <span className="text-primary">Direct</span> Promoções
+              </span>
+              <span className="block whitespace-nowrap text-[10px] font-medium text-muted-foreground">Gestão operacional</span>
+            </span>
+          </Link>
 
-          <nav className={`${compact ? "p-2.5" : "p-3"} space-y-1.5`} aria-label="Navegacao principal">
+          <nav className="flex min-w-0 flex-1 items-center justify-center gap-1" aria-label="Navegacao principal">
             {navItems.map((item) => {
               const active = location.pathname === item.to;
               const baseClasses = active
                 ? navToneClasses[item.tone]
-                : `text-sidebar-foreground hover:bg-sidebar-accent/75 hover:text-sidebar-accent-foreground ${navIconClasses[item.tone]}`;
-              const collapsedClasses = compact
-                ? "justify-center px-2 py-3"
-                : "justify-start gap-3 px-4 py-2.5";
+                : "text-muted-foreground hover:bg-muted/70 hover:text-foreground";
 
-              const linkBody = (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={`group relative flex min-h-11 items-center overflow-hidden rounded-xl text-sm font-bold transition-all duration-200 press-down ${collapsedClasses} ${baseClasses}`}
-                  >
-                  <item.icon size={18} />
-                  {!compact && <span className="whitespace-nowrap">{item.label}</span>}
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`group relative flex h-9 items-center gap-1.5 rounded-full border border-transparent px-3 text-xs font-bold transition-all duration-200 press-down ${baseClasses}`}
+                >
+                  <item.icon size={15} className={active ? "" : navIconClasses[item.tone]} />
+                  <span className="whitespace-nowrap">{item.label}</span>
                 </Link>
               );
-
-              if (compact) {
-                return (
-                  <Tooltip key={item.to}>
-                    <TooltipTrigger asChild>{linkBody}</TooltipTrigger>
-                    <TooltipContent side="right" sideOffset={14} className="glass-strong z-[100] border-white/15 font-bold">
-                      {item.label}
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              }
-              return linkBody;
             })}
           </nav>
 
-          <SyncIndicator status={syncStatus} compact />
-
-          {session && (
-            <div className={`space-y-1.5 border-t border-sidebar-border/70 ${compact ? "px-2.5 py-2.5" : "p-4"}`}>
-              {!compact && (
-                <p className="text-[11px] text-sidebar-muted truncate" title={user?.email ?? ""}>
-                  {user?.email}
-                </p>
-              )}
+          <div className="flex shrink-0 items-center gap-1.5 border-l border-border/70 pl-3">
+            <SyncIndicator status={syncStatus} compact />
+            <ThemeToggle />
+            {session && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     onClick={handleLogout}
                     aria-label="Sair da conta"
                     title="Sair"
-                    className={`rounded-xl border border-white/10 bg-card/35 text-sidebar-foreground hover:bg-destructive/12 hover:text-destructive ${compact ? "w-full justify-center px-2" : "w-full justify-start"}`}
+                    className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   >
-                    <LogOut size={14} />
-                    {!compact && <span>Sair</span>}
+                    <LogOut size={15} />
                   </Button>
                 </TooltipTrigger>
-                {compact && (
-                  <TooltipContent side="right" sideOffset={14} className="glass-strong z-[100] border-white/15 font-bold">
-                    Sair
-                  </TooltipContent>
-                )}
+                <TooltipContent side="bottom" sideOffset={10}>Sair</TooltipContent>
               </Tooltip>
-              <div className={compact ? "flex justify-center" : "flex justify-start"}>
-                <ThemeToggle />
-              </div>
-            </div>
-          )}
-        </aside>
+            )}
+          </div>
+        </header>
 
-        <main className="min-h-dvh w-full min-w-0 flex-1 lg:pl-2">
+        <main className="min-h-dvh w-full min-w-0">
           <div className="mobile-app-header gradient-sidebar fixed inset-x-0 top-0 z-40 rounded-b-[20px] border-x-0 border-t-0 px-4 pb-2.5 pt-2.5 shadow-sm lg:hidden">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -250,10 +218,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
           </div>
-          <div className="app-content mx-auto w-full max-w-[1720px] overflow-auto p-3 pt-20 sm:p-6 sm:pt-6 lg:px-8 safe-bottom animate-fade-in">{children}</div>
+          <div className="app-content mx-auto w-full max-w-[1720px] overflow-auto p-3 pt-20 sm:p-6 sm:pt-6 lg:px-5 lg:pb-8 lg:pt-4 safe-bottom animate-fade-in">{children}</div>
         </main>
 
-        <nav className="fixed inset-x-0 bottom-0 z-50 rounded-t-[22px] border border-b-0 border-white/45 bg-background/76 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-14px_40px_hsl(var(--foreground)/0.10)] backdrop-blur-2xl dark:border-white/10 lg:hidden" aria-label="Navegacao mobile">
+        <nav className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-50 border border-b-0 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 lg:hidden" aria-label="Navegacao mobile">
           <div className="grid grid-cols-6 gap-0.5">
             {navItems.map((item) => {
               const active = location.pathname === item.to;
