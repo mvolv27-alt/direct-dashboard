@@ -1217,7 +1217,7 @@ export default function DemandasPage() {
   const selectedDates = form.datas.map(fromISODate);
 
   return (
-    <div className="space-y-6 min-w-0 overflow-x-hidden">
+    <div className="space-y-7 min-w-0 overflow-x-hidden">
       {/* Header */}
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
@@ -1569,7 +1569,7 @@ export default function DemandasPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-5">
         <StatCard icon={<Store size={20} />} value={counts.total} label="Total de diárias" tone="primary" />
         <StatCard icon={<CircleDashed size={20} />} value={counts.pendente} label="Aguardando" tone="muted" />
         <StatCard icon={<UserCheck size={20} />} value={counts.presente} label="Presentes" tone="success" />
@@ -1731,7 +1731,7 @@ export default function DemandasPage() {
 
 
       {/* Lista agrupada por Rede > Loja > Dia > Horário > Setor */}
-      <div className="space-y-4">
+      <div className="space-y-5">
         {filtered.length === 0 ? (
           <div className="surface-panel p-8 text-center text-muted-foreground text-sm">
             Nenhuma demanda encontrada.

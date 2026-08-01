@@ -63,6 +63,27 @@ test.describe("professional responsive UI", () => {
     await expect(page.getByRole("status")).toBeVisible();
   });
 
+  test("floating cards animate without ignoring reduced motion", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Hover motion is a desktop interaction.");
+    await page.goto("/#/dashboard");
+    await page.waitForTimeout(800);
+
+    const card = page.locator(".metric-accent").first();
+    await expect(card).toBeVisible();
+    const restingTransform = await card.evaluate((element) => getComputedStyle(element).transform);
+    await card.hover();
+    await page.waitForTimeout(380);
+    const hoverTransform = await card.evaluate((element) => getComputedStyle(element).transform);
+    expect(hoverTransform).not.toBe(restingTransform);
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const reducedDurationMs = await card.evaluate((element) => {
+      const durationSeconds = Number.parseFloat(getComputedStyle(element).transitionDuration);
+      return durationSeconds * 1000;
+    });
+    expect(reducedDurationMs).toBeLessThanOrEqual(0.02);
+  });
+
   test("dialogs stay centered and scroll inside the viewport", async ({ page }, testInfo) => {
     const cases = [
       { route: "financeiro", button: /Novo Registro/i },

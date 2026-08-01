@@ -65,11 +65,11 @@
 
     --shadow-2xs: 0 1px 3px hsl(214 45% 18% / 0.07);
     --shadow-xs: 0 3px 8px hsl(214 45% 18% / 0.09);
-    --shadow-sm: 0 7px 18px hsl(214 45% 18% / 0.12);
-    --shadow: 0 10px 24px hsl(214 45% 18% / 0.15);
-    --shadow-md: 0 14px 32px hsl(214 45% 18% / 0.18);
-    --shadow-lg: 0 18px 42px hsl(214 45% 18% / 0.2);
-    --shadow-xl: 0 24px 54px hsl(214 45% 18% / 0.23);
+    --shadow-sm: 0 4px 9px hsl(214 45% 18% / 0.1), 0 12px 24px hsl(214 45% 18% / 0.12);
+    --shadow: 0 5px 12px hsl(214 45% 18% / 0.11), 0 17px 34px hsl(214 45% 18% / 0.15);
+    --shadow-md: 0 7px 16px hsl(214 45% 18% / 0.12), 0 22px 44px hsl(214 45% 18% / 0.18);
+    --shadow-lg: 0 10px 22px hsl(214 45% 18% / 0.14), 0 28px 56px hsl(214 45% 18% / 0.2);
+    --shadow-xl: 0 12px 28px hsl(214 45% 18% / 0.16), 0 34px 68px hsl(214 45% 18% / 0.23);
     --shadow-2xl: 0 30px 64px hsl(214 45% 18% / 0.27);
     --glow-primary: 0 8px 22px hsl(245 78% 61% / 0.24), 0 0 0 1px hsl(190 95% 46% / 0.14);
     --glow-secondary: 0 8px 22px hsl(190 95% 46% / 0.22), 0 0 0 1px hsl(190 95% 46% / 0.12);
@@ -137,11 +137,11 @@
 
     --shadow-2xs: 0 2px 5px hsl(207 90% 2% / 0.32);
     --shadow-xs: 0 4px 10px hsl(207 90% 2% / 0.38);
-    --shadow-sm: 0 8px 20px hsl(207 90% 2% / 0.44);
-    --shadow: 0 12px 28px hsl(207 90% 2% / 0.5);
-    --shadow-md: 0 16px 38px hsl(207 90% 2% / 0.56);
-    --shadow-lg: 0 22px 48px hsl(207 90% 2% / 0.62);
-    --shadow-xl: 0 28px 60px hsl(207 90% 2% / 0.68);
+    --shadow-sm: 0 5px 12px hsl(207 90% 2% / 0.42), 0 15px 30px hsl(207 90% 2% / 0.34);
+    --shadow: 0 7px 16px hsl(207 90% 2% / 0.48), 0 20px 40px hsl(207 90% 2% / 0.4);
+    --shadow-md: 0 9px 20px hsl(207 90% 2% / 0.52), 0 26px 52px hsl(207 90% 2% / 0.48);
+    --shadow-lg: 0 12px 26px hsl(207 90% 2% / 0.58), 0 32px 64px hsl(207 90% 2% / 0.54);
+    --shadow-xl: 0 15px 32px hsl(207 90% 2% / 0.64), 0 38px 76px hsl(207 90% 2% / 0.6);
     --shadow-2xl: 0 34px 72px hsl(207 90% 2% / 0.74);
     --glow-primary: 0 8px 24px hsl(246 91% 72% / 0.22), 0 0 0 1px hsl(190 100% 53% / 0.14);
     --glow-secondary: 0 8px 24px hsl(190 100% 53% / 0.2), 0 0 0 1px hsl(190 100% 53% / 0.14);
@@ -210,16 +210,16 @@
   .surface-section {
     position: relative;
     isolation: isolate;
-    background: hsl(var(--card) / 0.97);
-    border: 1px solid hsl(var(--border) / 0.78);
-    border-radius: 16px;
-    box-shadow: var(--shadow-sm), inset 0 1px 0 hsl(var(--glass-highlight));
-    backdrop-filter: blur(14px) saturate(112%);
-    -webkit-backdrop-filter: blur(14px) saturate(112%);
+    background: hsl(var(--card) / 0.985);
+    border: 1px solid hsl(var(--border) / 0.74);
+    border-radius: 20px;
+    box-shadow: var(--shadow-sm), 0 0 0 1px hsl(var(--primary-glow) / 0.035), inset 0 1px 0 hsl(var(--glass-highlight));
+    backdrop-filter: blur(6px) saturate(106%);
+    -webkit-backdrop-filter: blur(6px) saturate(106%);
   }
 
   .surface-section {
-    background: hsl(var(--card) / 0.9);
+    background: hsl(var(--card) / 0.94);
   }
 
   .surface-panel::after,
@@ -238,11 +238,12 @@
     position: relative;
     overflow: hidden;
     border: 1px solid hsl(var(--border) / 0.84) !important;
-    border-radius: 16px;
+    border-radius: 20px;
     color: hsl(var(--card-foreground));
     transform: translateZ(0);
     background: hsl(var(--card));
-    box-shadow: var(--shadow-sm), inset 0 1px 0 hsl(var(--glass-highlight));
+    backface-visibility: hidden;
+    box-shadow: var(--shadow-sm), 0 0 0 1px hsl(var(--primary-glow) / 0.045), inset 0 1px 0 hsl(var(--glass-highlight));
   }
 
   .metric-accent::before {
@@ -250,7 +251,7 @@
     position: absolute;
     inset: 0 0 auto;
     width: auto;
-    height: 1px;
+    height: 2px;
     background: linear-gradient(90deg, hsl(var(--primary-glow)), hsl(var(--primary)), transparent 72%);
     opacity: 0.9;
   }
@@ -261,15 +262,17 @@
     inset: 0;
     width: auto;
     height: auto;
-    background: linear-gradient(118deg, hsl(var(--primary-glow) / 0.055), transparent 38%);
-    opacity: 0.8;
+    background: linear-gradient(112deg, transparent 18%, hsl(var(--primary-glow) / 0.12) 44%, transparent 68%);
+    opacity: 0;
     pointer-events: none;
+    transform: translate3d(-72%, 0, 0);
+    transition: transform 560ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 220ms ease;
   }
 
   .metric-accent.border-l-primary {
     background: linear-gradient(145deg, hsl(216 47% 24%), hsl(204 66% 20%));
     border-color: hsl(194 72% 50% / 0.42) !important;
-    box-shadow: 0 9px 22px hsl(211 55% 20% / 0.28), inset 0 1px 0 hsl(190 100% 82% / 0.14);
+    box-shadow: 0 7px 15px hsl(211 55% 20% / 0.24), 0 22px 42px hsl(211 55% 20% / 0.3), inset 0 1px 0 hsl(190 100% 82% / 0.14);
     color: white;
   }
 
@@ -322,14 +325,14 @@
   .dark .metric-accent {
     background: hsl(var(--card));
     border-color: hsl(var(--border) / 0.78) !important;
-    box-shadow: 0 8px 20px hsl(207 90% 2% / 0.46), inset 0 1px 0 hsl(var(--glass-highlight));
+    box-shadow: var(--shadow-sm), 0 0 0 1px hsl(var(--primary-glow) / 0.08), inset 0 1px 0 hsl(var(--glass-highlight));
     color: hsl(var(--card-foreground));
   }
 
   .finance-kpi-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.8rem;
+    gap: 1rem;
   }
 
   .page-heading {
@@ -387,9 +390,9 @@
     border: 1px solid hsl(var(--border) / 0.82);
     border-radius: 18px;
     background: hsl(var(--card) / 0.94);
-    box-shadow: var(--shadow-sm), inset 0 1px 0 hsl(var(--glass-highlight));
-    backdrop-filter: blur(16px) saturate(116%);
-    -webkit-backdrop-filter: blur(16px) saturate(116%);
+    box-shadow: var(--shadow-md), 0 0 0 1px hsl(var(--primary-glow) / 0.04), inset 0 1px 0 hsl(var(--glass-highlight));
+    backdrop-filter: blur(10px) saturate(110%);
+    -webkit-backdrop-filter: blur(10px) saturate(110%);
   }
 
   .brand-mark {
@@ -419,7 +422,7 @@
   .diarista-card,
   .finance-panel {
     overflow: hidden;
-    border-radius: 16px;
+    border-radius: 20px;
   }
 
   .dashboard-section::before,
@@ -450,10 +453,14 @@
 
   .demand-card {
     background: hsl(var(--card) / 0.98);
+    content-visibility: auto;
+    contain-intrinsic-size: 240px;
   }
 
   .diarista-card {
     background: hsl(var(--card) / 0.98);
+    content-visibility: auto;
+    contain-intrinsic-size: 270px;
   }
 
   .diarista-card::before {
@@ -462,6 +469,8 @@
 
   .finance-panel {
     background: hsl(var(--card) / 0.98);
+    content-visibility: auto;
+    contain-intrinsic-size: 540px;
   }
 
   .finance-panel::before {
@@ -486,10 +495,10 @@
     isolation: isolate;
     background: hsl(var(--glass-fill-strong));
     border: 1px solid hsl(var(--border) / 0.8);
-    border-radius: 16px;
+    border-radius: 20px;
     box-shadow: var(--shadow-sm), inset 0 1px 0 hsl(var(--glass-highlight));
-    backdrop-filter: blur(14px) saturate(112%);
-    -webkit-backdrop-filter: blur(14px) saturate(112%);
+    backdrop-filter: blur(7px) saturate(107%);
+    -webkit-backdrop-filter: blur(7px) saturate(107%);
   }
 
   .glass-strong { box-shadow: var(--shadow-md), inset 0 1px 0 hsl(var(--glass-highlight)); }
@@ -525,17 +534,25 @@
   .glow-hover:hover { box-shadow: var(--glow-primary); transform: translateY(-2px); }
 
   .hover-lift {
-    transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 240ms ease, border-color 240ms ease, background-color 240ms ease;
+    transform: translate3d(0, 0, 0);
+    transform-origin: center;
+    backface-visibility: hidden;
+    transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 320ms ease, border-color 240ms ease, background-color 240ms ease;
   }
   .hover-lift:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-md), 0 0 0 1px hsl(var(--primary-glow) / 0.12);
-    border-color: hsl(var(--primary-glow) / 0.36);
+    z-index: 3;
+    transform: translate3d(0, -8px, 0) scale(1.012);
+    box-shadow: var(--shadow-lg), 0 0 0 1px hsl(var(--primary-glow) / 0.18), 0 0 28px hsl(var(--primary-glow) / 0.09);
+    border-color: hsl(var(--primary-glow) / 0.5);
+  }
+  .hover-lift:hover::after {
+    opacity: 1;
+    transform: translate3d(72%, 0, 0);
   }
   .hover-scale { transition: transform 180ms ease; }
   .hover-scale:hover { transform: scale(1.018); }
   .press-down { transition: transform 120ms ease; }
-  .press-down:active { transform: scale(0.97); }
+  .press-down:active { transform: translateY(1px) scale(0.955); }
 
   .skeleton {
     position: relative;
@@ -565,7 +582,7 @@
   .border-soft { border: 1px solid hsl(var(--glass-border)); }
   .border-glow { border: 1px solid hsl(var(--primary) / 0.48); box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1), var(--glow-primary); }
 
-  .animate-in-up { animation: in-up 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .animate-in-up { animation: in-up 620ms cubic-bezier(0.16, 1, 0.3, 1) both; }
   .animate-fade-in { animation: fade-in 360ms ease-out both; }
   .animate-scale-in { animation: scale-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 }
@@ -582,16 +599,64 @@
   75%, 100% { transform: scale(2); opacity: 0; }
 }
 @keyframes in-up {
-  from { opacity: 0; transform: translateY(14px) scale(0.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  0% { opacity: 0; transform: translate3d(0, 26px, 0) scale(0.95); }
+  68% { opacity: 1; transform: translate3d(0, -3px, 0) scale(1.008); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 @keyframes scale-in {
-  from { opacity: 0; transform: scale(0.965); }
-  to { opacity: 1; transform: scale(1); }
+  0% { opacity: 0; transform: scale(0.9); }
+  72% { opacity: 1; transform: scale(1.018); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes surface-arrive {
+  0% { opacity: 0; transform: translate3d(0, 30px, 0) scale(0.94); }
+  62% { opacity: 1; transform: translate3d(0, -5px, 0) scale(1.012); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes header-arrive {
+  from { opacity: 0; transform: translate3d(0, -18px, 0) scale(0.985); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .desktop-app-header {
+    animation: header-arrive 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .app-content > * > header,
+  .app-content > * > .flex:first-child {
+    animation: header-arrive 520ms 50ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .metric-accent,
+  .dashboard-section,
+  .demand-group,
+  .diarista-card,
+  .finance-panel {
+    animation: surface-arrive 680ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+
+  .metric-accent:nth-child(2),
+  .dashboard-section:nth-child(2),
+  .diarista-card:nth-child(2) { animation-delay: 70ms; }
+  .metric-accent:nth-child(3),
+  .dashboard-section:nth-child(3),
+  .diarista-card:nth-child(3) { animation-delay: 120ms; }
+  .metric-accent:nth-child(4),
+  .dashboard-section:nth-child(4),
+  .diarista-card:nth-child(4) { animation-delay: 170ms; }
+  .metric-accent:nth-child(5),
+  .diarista-card:nth-child(5) { animation-delay: 220ms; }
+  .metric-accent:nth-child(6),
+  .diarista-card:nth-child(6) { animation-delay: 270ms; }
+  .metric-accent:nth-child(7),
+  .diarista-card:nth-child(7) { animation-delay: 320ms; }
 }
 
 @keyframes dialog-enter {
@@ -621,12 +686,12 @@
     border: 1px solid hsl(var(--primary-glow) / 0.2);
     border-radius: 24px;
     background: hsl(var(--background) / 0.92);
-    box-shadow: 0 18px 50px hsl(211 50% 18% / 0.2), inset 0 1px 0 hsl(var(--glass-highlight));
+    box-shadow: 0 12px 28px hsl(211 50% 18% / 0.16), 0 32px 76px hsl(211 50% 18% / 0.22), inset 0 1px 0 hsl(var(--glass-highlight));
   }
 
   .dark .app-shell {
     background: hsl(var(--background) / 0.9);
-    box-shadow: 0 18px 58px hsl(207 90% 2% / 0.58), 0 0 0 1px hsl(var(--primary-glow) / 0.06), inset 0 1px 0 hsl(var(--glass-highlight));
+    box-shadow: 0 14px 32px hsl(207 90% 2% / 0.5), 0 38px 86px hsl(207 90% 2% / 0.64), 0 0 0 1px hsl(var(--primary-glow) / 0.08), inset 0 1px 0 hsl(var(--glass-highlight));
   }
 }
 
@@ -687,9 +752,9 @@
   .glass,
   .glass-strong,
   .glass-subtle {
-    border-radius: 16px;
-    backdrop-filter: blur(12px) saturate(110%);
-    -webkit-backdrop-filter: blur(12px) saturate(110%);
+    border-radius: 18px;
+    backdrop-filter: blur(5px) saturate(104%);
+    -webkit-backdrop-filter: blur(5px) saturate(104%);
   }
 
   .space-y-6 > :not([hidden]) ~ :not([hidden]) {

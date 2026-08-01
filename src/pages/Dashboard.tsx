@@ -362,7 +362,7 @@ export default function Dashboard() {
   const tableNames: Record<string, string> = { demandas: "Demanda", diaristas: "Diarista", registros_financeiros: "Financeiro", lojas: "Loja", profiles: "Supervisor" };
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-4 pb-2">
+    <div className="mx-auto max-w-[1600px] space-y-5 pb-2">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -388,7 +388,7 @@ export default function Dashboard() {
         {selectedDate !== localISODate() && <button onClick={() => setSelectedDate(localISODate())} className="font-medium text-primary hover:underline">Voltar para hoje</button>}
       </div>
 
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" aria-label="Resumo do dia">
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5 xl:gap-5" aria-label="Resumo do dia">
         <MetricCard icon={Users} label="Cobertura" value={`${metrics.coverage}%`} helper={`${metrics.allocated} de ${metrics.slots} vagas preenchidas`} tone={!metrics.slots ? "primary" : metrics.coverage >= 90 ? "success" : metrics.coverage >= 70 ? "warning" : "destructive"} />
         <MetricCard icon={CheckCircle2} label="Presentes" value={String(metrics.present)} helper={`${metrics.allocated} diarista(s) alocado(s)`} tone="success" />
         <MetricCard icon={UserRoundX} label="Faltas" value={String(metrics.absent)} helper={metrics.absent ? "Precisam de acompanhamento" : "Nenhuma falta registrada"} tone="destructive" />
@@ -396,7 +396,7 @@ export default function Dashboard() {
         <MetricCard icon={CloudUpload} label="Envios pendentes" value={String(sync.pending)} helper={sync.pending ? "Aguardando sincronização" : "Tudo enviado para a nuvem"} tone="secondary" />
       </section>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.15fr)_300px]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.15fr)_300px]">
         <section ref={prioritiesRef} className="surface-panel dashboard-section scroll-mt-24 overflow-hidden">
           <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
             <div><h2 className="font-semibold text-card-foreground">Prioridades</h2><p className="text-xs text-muted-foreground">Ordenadas por urgência e horário</p></div>

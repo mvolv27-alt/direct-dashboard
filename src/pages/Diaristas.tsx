@@ -344,7 +344,7 @@ export default function DiaristaPage() {
   const historyItems = historyFor ? getHistorico(historyFor.id) : [];
 
   return (
-    <div className="space-y-6 min-w-0 overflow-x-hidden">
+    <div className="space-y-7 min-w-0 overflow-x-hidden">
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <div className="aurora-icon flex h-10 w-10 shrink-0 items-center justify-center bg-secondary/12 text-secondary">
@@ -533,7 +533,7 @@ export default function DiaristaPage() {
           Nenhum diarista encontrado.
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
           {filtered.map((d) => {
             const { presencas, faltas } = getStatsDiarista(demandas, d.id);
             const nota = calcularAvaliacao(presencas, faltas);
