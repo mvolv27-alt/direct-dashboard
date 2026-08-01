@@ -362,7 +362,7 @@ export default function FinanceiroPage() {
   }
 
   return (
-    <div className="space-y-6 min-w-0 overflow-x-hidden">
+    <div className="space-y-7 min-w-0 overflow-x-hidden">
       {/* Header */}
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
@@ -573,7 +573,7 @@ export default function FinanceiroPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
           <section className="surface-panel finance-panel p-4 space-y-4 overflow-hidden">
             <div>
               <h3 className="text-sm font-semibold text-foreground">Empresa</h3>
